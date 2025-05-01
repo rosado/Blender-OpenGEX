@@ -1,8 +1,8 @@
 import os
 from collections import OrderedDict
 import itertools
-from io_scene_ogex.pyddl import DdlPrimitiveDataType as DataType
-from io_scene_ogex.pyddl import *
+from .pyddl import DdlPrimitiveDataType as DataType
+from .pyddl import *
 
 """
 DdlStructure subclasses for structures of OpenGEX for easier use.
@@ -172,7 +172,7 @@ class Material(DdlStructure):
         if material.name != "":
             self.children.append(Name(material.name))
 
-        intensity = material.diffuse_intensity
+        intensity = 1.0 # material.diffuse_intensity
         diffuse = [material.diffuse_color[0] * intensity, material.diffuse_color[1] * intensity,
                    material.diffuse_color[2] * intensity]
 
@@ -184,33 +184,33 @@ class Material(DdlStructure):
 
         if (specular[0] > 0.0) or (specular[1] > 0.0) or (specular[2] > 0.0):
             self.children.append(Color("specular", specular))
-            self.children.append(Param("specular_power", material.specular_hardness))
+            #self.children.append(Param("specular_power", material.specular_hardness))
 
-        emission = material.emit
-        if emission > 0.0:
-            self.children.append(Color("emission", [emission, emission, emission]))
+        # emission = material.emit
+        # if emission > 0.0:
+        #     self.children.append(Color("emission", [emission, emission, emission]))
 
         # export ambient factor if enabled.
-        if export_ambient and material.ambient != 1.0:
-            self.children.append(Param("ambient_factor", material.ambient))
+        # if export_ambient and material.ambient != 1.0:
+        #     self.children.append(Param("ambient_factor", material.ambient))
 
         # export shadeless flag
-        if material.use_shadeless:
-            self.children.append(Extension(type=B"Shadeless", children=[
-                DdlPrimitive(DataType.bool, data=[True])
-            ]))
+        # if material.use_shadeless:
+        #     self.children.append(Extension(type=B"Shadeless", children=[
+        #         DdlPrimitive(DataType.bool, data=[True])
+        #     ]))
 
         # export shadow receive flag
-        if material.use_shadows:
-            self.children.append(Extension(type=B"Shadow/receive", children=[
-                DdlPrimitive(DataType.bool, data=[True])
-            ]))
+        # if material.use_shadows:
+        #     self.children.append(Extension(type=B"Shadow/receive", children=[
+        #         DdlPrimitive(DataType.bool, data=[True])
+        #     ]))
 
         # export shadow cast flag
-        if material.use_cast_shadows:
-            self.children.append(Extension(type=B"Shadow/cast", children=[
-                DdlPrimitive(DataType.bool, data=[True])
-            ]))
+        # if material.use_cast_shadows:
+        #     self.children.append(Extension(type=B"Shadow/cast", children=[
+        #         DdlPrimitive(DataType.bool, data=[True])
+        #     ]))
         self.children.extend(textures)
 
 

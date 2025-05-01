@@ -1,7 +1,7 @@
-from io_scene_ogex.BaseWrapper import BaseWrapper
-from io_scene_ogex.ExporterState import *
+from .BaseWrapper import BaseWrapper
+from .ExporterState import *
 
-from io_scene_ogex.BoneWrapper import BoneWrapper
+from .BoneWrapper import BoneWrapper
 
 __author__ = 'Eric Lengyel, Jonathan Hale, Nicolas Wehrle'
 
@@ -20,7 +20,9 @@ class NodeWrapper(BaseWrapper):
                 if obj in dupli_group or len(dupli_group) == 0:
                     self.children.append(NodeWrapper(obj, self.container, self, None, dupli_group=dupli_group))
 
-        if node.dupli_type == 'GROUP' and node.dupli_group:
+        # TODO(rosado): only one use of `dupli_type`, needs cleanup
+        # if node.dupli_type == 'GROUP' and node.dupli_group:
+        if hasattr(node, 'dupli_type') and node.dupli_type == 'GROUP' and node.dupli_group:
             offset = node.dupli_group.dupli_offset
             group = [o for o in node.dupli_group.objects]
 

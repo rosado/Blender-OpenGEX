@@ -27,17 +27,9 @@
 
 import bpy
 
-from io_scene_ogex.OpenGexExporter import OpenGexExporter
+from .OpenGexExporter import OpenGexExporter
 
 __author__ = ' Jonathan Hale, Eric Lengyel,Nicolas Wehrle'
-
-bl_info = {
-    "name": "OpenGEX format (.ogex)",
-    "description": "OpenGEX Exporter",
-    "author": "Jonathan Hale, Eric Lengyel, Nicolas Wehrle",
-    "version": (1, 1, 2, 1),
-    "location": "File > Import-Export",
-    "category": "Import-Export"}
 
 
 def menu_func(self, _):
@@ -46,13 +38,9 @@ def menu_func(self, _):
 
 def register():
     bpy.utils.register_class(OpenGexExporter)
-    bpy.types.INFO_MT_file_export.append(menu_func)
+    bpy.types.TOPBAR_MT_file_export.append(menu_func)
 
 
 def unregister():
-    bpy.types.INFO_MT_file_export.remove(menu_func)
+    bpy.types.TOPBAR_MT_file_export.remove(menu_func)
     bpy.utils.unregister_class(OpenGexExporter)
-
-
-if __name__ == "__main__":
-    register()

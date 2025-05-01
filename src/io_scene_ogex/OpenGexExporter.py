@@ -3,9 +3,11 @@ import bmesh
 import time
 from mathutils import Matrix
 from bpy_extras.io_utils import ExportHelper
-from io_scene_ogex.NodeWrapper import NodeWrapper
-from io_scene_ogex.ExporterState import *
-from io_scene_ogex.pygex import *
+
+from .utils import uv_map_attributes, uv_map_attributes_via_uv_layers
+from .NodeWrapper import NodeWrapper
+from .ExporterState import *
+from .pygex import *
 
 __author__ = 'Eric Lengyel, Jonathan Hale, Nicolas Wehrle'
 
@@ -59,57 +61,59 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
     bl_label = "Export OpenGEX"
     filename_ext = ".ogex"
 
-    export_selection = bpy.props.BoolProperty(name="Export Selection Only",
-                                              description="Export only selected objects", default=False)
-    sample_animation = bpy.props.BoolProperty(name="Force Sampled Animation",
-                                              description="Always export animation as per-frame samples",
-                                              default=False)
+    export_selection: bpy.props.BoolProperty(name="Export Selection Only",
+                                             description="Export only selected objects", default=False)
+    sample_animation: bpy.props.BoolProperty(name="Force Sampled Animation",
+                                             description="Always export animation as per-frame samples",
+                                             default=False)
 
     # Advanced settings
-    export_only_first_material = bpy.props.BoolProperty(name="Export First Material Only",
-                                                        description="Only export the first material of any object. May"
-                                                                    "be useful for some game engines for example.",
-                                                        default=False)
-    rounding = bpy.props.IntProperty(name="Float Rounding Decimal Places",
-                                     description="Amount of decimal places to round floating point values to.",
-                                     default=6)
-    oddl_format = bpy.props.EnumProperty(name="OpenDDL Format", items=oddl_format_items, default='TEXT',
-                                         description="Format for the exported OpenGEX (based on OpenDDL) file.")
+    export_only_first_material: bpy.props.BoolProperty(name="Export First Material Only",
+                                                       description="Only export the first material of any object. May"
+                                                                   "be useful for some game engines for example.",
+                                                       default=False)
+    rounding: bpy.props.IntProperty(name="Float Rounding Decimal Places",
+                                    description="Amount of decimal places to round floating point values to.",
+                                    default=6)
+    oddl_format: bpy.props.EnumProperty(name="OpenDDL Format", items=oddl_format_items, default='TEXT',
+                                        description="Format for the exported OpenGEX (based on OpenDDL) file.")
 
     # Extension settings
-    export_custom_properties = bpy.props.BoolProperty(name="Export Custom Properties",
-                                                      description="Export object custom properties to an OGEX"
+    export_custom_properties: bpy.props.BoolProperty(name="Export Custom Properties",
+                                                     description="Export object custom properties to an OGEX"
                                                                   "Extension structure",
-                                                      default=False)
-    export_physics = bpy.props.BoolProperty(name="Export Game Physics",
-                                            description="Export game physics to an OGEX 'PhysicsMaterial' and"
-                                                        "'PhysicsConstraint' Extension structures.",
-                                            default=False)
-    export_ambient = bpy.props.BoolProperty(name="Export Ambient Color",
-                                            description="Export world ambient color and material ambient factors as a"
-                                                        "not officially specified Param.",
-                                            default=False)
-    export_audio = bpy.props.BoolProperty(name="Export Audio Sources",
-                                          description="Export Speaker objects to an OGEX Extension structure.",
-                                          default=False)
-    audio_path_prefix = bpy.props.StringProperty(name="Audio Path Prefix", default='',
-                                                 description="Prefix relative to the exported scene file\n"
-                                                             "to set audio paths to.\n\nExample: audio/")
+                                                     default=False)
+    export_physics: bpy.props.BoolProperty(name="Export Game Physics",
+                                           description="Export game physics to an OGEX 'PhysicsMaterial' and"
+                                                       "'PhysicsConstraint' Extension structures.",
+                                           default=False)
+    export_ambient: bpy.props.BoolProperty(name="Export Ambient Color",
+                                           description="Export world ambient color and material ambient factors as a"
+                                                       "not officially specified Param.",
+                                           default=False)
+    export_audio: bpy.props.BoolProperty(name="Export Audio Sources",
+                                         description="Export Speaker objects to an OGEX Extension structure.",
+                                         default=False)
+    audio_path_prefix: bpy.props.StringProperty(name="Audio Path Prefix", default='',
+                                                description="Prefix relative to the exported scene file\n"
+                                                            "to set audio paths to.\n\nExample: audio/")
 
     # image texture export properties
-    export_image_textures = bpy.props.BoolProperty(name="Export Image Textures",
-                                                   description="Whether to export images for exported textures.")
-    image_path_prefix = bpy.props.StringProperty(name="Image Path Prefix", default='',
-                                                 description="Prefix relative to the exported scene file\n"
+    export_image_textures: bpy.props.BoolProperty(name="Export Image Textures",
+                                                  description="Whether to export images for exported textures.")
+    image_path_prefix: bpy.props.StringProperty(name="Image Path Prefix", default='',
+                                                description="Prefix relative to the exported scene file\n"
                                                              "to export image textures to.\n\nExample: textures/")
-    image_format = bpy.props.EnumProperty(name="Image Format", items=image_format_items, default='PNG',
-                                          description="Format for exported image textures.")
+    image_format: bpy.props.EnumProperty(name="Image Format", items=image_format_items, default='PNG',
+                                         description="Format for exported image textures.")
+    
+    conainer: ExporterState | None
 
-    def __init__(self):
-        super().__init__()
-        self.progress = ProgressLog()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.progress: ProgressLog = ProgressLog()
         self.container = None
-        self.document = None
+        self.document: DdlDocument = None
         self.unresolved_refs = []
 
     @staticmethod
@@ -915,7 +919,7 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
                 mesh = nw.item
 
                 geometry = self.export_geometry(scene, node=mesh, mesh=mesh.data)
-                materials = self.export_materials(mesh, mesh.material_slots)
+                materials = self.export_materials(mesh, nw.item.material_slots)
                 struct = GeometryNode(mesh=nw.item,
                                       name=nw.nodeRef["structName"],
                                       materials=materials,
@@ -1363,19 +1367,20 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
         ]))
 
     @staticmethod
-    def to_per_vertex_data(m, num_materials=1, uv_layers=None):
+    def to_per_vertex_data(m: bmesh.types.BMesh, num_materials=1):
         """
         Generate per vertex data from blender bmesh.
         :param m: triangulated bmesh to generate the data from
         :param num_materials: number of materials used in the mesh
         :param uv_layers: names of uv layers to export or None to export all.
-        :return: dict of property to data. Possibly keys are: "position", "normal", "tris" and "texcoord"
+        :return: dict of property to data. Possible keys are: "position", "normal", "tris" and "texcoord"
         """
+
         num_materials = max(1, num_materials)
 
         num_verts = len(m.verts)
 
-        # list of list which stores all the new indices corresponding to an old index
+        # list of lists which stores all the new indices corresponding to an old index
         index_translation = [[i] for i in range(num_verts)]
         positions = [v.co for v in m.verts]
         normals = [None] * num_verts
@@ -1384,38 +1389,33 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
         if color_layer is not None:
             colors = [None] * num_verts
 
-        if uv_layers is None:
-            active_uv_layers = [layer for layer in m.loops.layers.uv.values()]
-        else:
-            active_uv_layers = [m.loops.layers.uv[name] for name in uv_layers]
-
+        active_uv_layers = m.loops.layers.uv.values()
         has_uv_layers = (len(active_uv_layers) != 0)
         if has_uv_layers:
-            texcoords = {l: [None] * num_verts for l in active_uv_layers}
+            texcoords = {l: [None] * num_verts for l in range(len(active_uv_layers))}
 
         mesh_indices = [[]] * num_materials  # list of triples of the faces for all materials
 
         for face in m.faces:
             face_indices = [0, 0, 0]
 
-            for cur_index, loop in enumerate(face.loops):
+            for loop_index, loop in enumerate(face.loops):
                 vert = loop.vert
 
                 pos = vert.co
                 normal = vert.normal if face.smooth else face.normal
 
                 # check if this vertex has not been initialized yet:
-                i = vert.index
-                if normals[i] is None:
+                if normals[vert.index] is None:
                     # not in use yet, we can set the data for this
                     # vertex safely
-                    normals[i] = normal
+                    normals[vert.index] = normal
                     if color_layer is not None:
-                        colors[i] = loop[color_layer]
-                    for layer in active_uv_layers:
-                        texcoords[layer][i] = loop[layer].uv
+                        colors[vert.index] = loop[color_layer]
+                    for layer_index, uv_layer in enumerate(active_uv_layers):
+                        texcoords[layer_index][vert.index] = loop[uv_layer].uv
 
-                    face_indices[cur_index] = i
+                    face_indices[loop_index] = vert.index
                     continue
                 # else: check for an existing vertex that matches our data.
                 indices = index_translation[vert.index]  # existing indices with same position
@@ -1436,8 +1436,8 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
 
                     # texture coordinates
                     found_uvs = True  # in case we do not have any active layers.
-                    for layer in active_uv_layers:
-                        if texcoords[layer][i] != loop[layer].uv:
+                    for layer_index, uv_layer in enumerate(active_uv_layers):
+                        if texcoords[layer_index][i] != loop[uv_layer].uv:
                             found_uvs = False
                             break
 
@@ -1447,7 +1447,7 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
 
                     # we found matching data => reuse!
                     found_existing = True
-                    face_indices[cur_index] = i
+                    face_indices[loop_index] = i
                     break
 
                 if not found_existing:
@@ -1455,7 +1455,7 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
                     new_index = len(positions)
 
                     indices.append(new_index)  # make sure this vertex can be found later
-                    face_indices[cur_index] = new_index
+                    face_indices[loop_index] = new_index
 
                     # append data of current loop
                     positions.append(pos)
@@ -1463,8 +1463,8 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
                     if color_layer is not None:
                         colors.append(loop[color_layer])
 
-                    for layer in active_uv_layers:
-                        texcoords[layer].append(loop[layer].uv)
+                    for layer_index, layer in enumerate(active_uv_layers):
+                        texcoords[layer_index].append(loop[uv_layer].uv)
 
             # add the triple to the list of faces/triangles for the corresponding material index
             mesh_indices[face.material_index].append(face_indices)
@@ -1476,7 +1476,7 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
             ret_value["color"] = colors
         return ret_value
 
-    def export_geometry(self, scene, node, mesh):
+    def export_geometry(self, scene, node: bpy.types.Object, mesh: bpy.types.Mesh):
         if mesh in self.container.geometry_array:
             entry = self.container.geometry_array[mesh]
             if node not in entry["nodeTable"]:
@@ -1545,22 +1545,30 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
         # but the Blender API does not provide a reasonable way to retrieve the mesh at an
         # arbitrary stage in the modifier stack.
 
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        # eval_node = node.evaluated_get(depsgraph)
+        # eval_node.original.to_mesh(preserve_all_data_layers=True)
+
         m = bmesh.new()
-        mesh = node.to_mesh(scene, apply_modifiers, "RENDER", True, False)
+        mesh = node.to_mesh(preserve_all_data_layers=True, depsgraph=depsgraph)
         m.from_mesh(mesh)
 
         # Triangulate the mesh
-        bmesh.ops.triangulate(m, faces=m.faces, quad_method=0, ngon_method=0)
+        bmesh.ops.triangulate(m, faces=m.faces, quad_method='ALTERNATE', ngon_method='BEAUTY')
 
         m.faces.ensure_lookup_table()
         m.edges.ensure_lookup_table()
 
         # cleanup loose edges and vertices
-        bmesh.ops.delete(m, geom=[v for v in m.verts if len(v.link_faces) == 0], context=1)  # 1 <=> DEL_VERTS
+        tmp_geom = [v for v in m.verts if len(v.link_faces) == 0]
+        bmesh.ops.delete(m, geom=tmp_geom, context="VERTS")  #(m, geom=[v for v in m.verts if len(v.link_faces) == 0], context=1)  # 1 <=> DEL_VERTS
+        bmesh.ops.delete(m, geom=tmp_geom, context="EDGES")
 
-        uv_layers = [mesh.uv_textures.active_index] if mesh.uv_textures.active_index != -1 else None
+        uv_layers = [l for l in mesh.uv_layers] if mesh.uv_layers.active else []
+        uv_attrs = uv_map_attributes_via_uv_layers(mesh)
+        assert len(uv_layers) == len(uv_attrs)
 
-        export_mesh = self.to_per_vertex_data(m, num_materials=len(mesh.materials), uv_layers=uv_layers)
+        export_mesh = self.to_per_vertex_data(m, num_materials=len(mesh.materials))
         vertex_count = len(export_mesh["position"])
 
         mesh_struct = Mesh(mesh=m, children=[
@@ -1576,7 +1584,7 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
         # Write the color array if it exists.
         if "color" in export_mesh:
             mesh_struct.children.append(VertexArray(B"color", vertex_count=vertex_count, data=export_mesh["color"]))
-
+        
         # Write the texcoord arrays.
         if "texcoord" in export_mesh:
             count = 0
@@ -1723,21 +1731,21 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
 
             textures = []
 
-            for textureSlot in material.texture_slots:
-                if textureSlot and textureSlot.use and (textureSlot.texture.type == "IMAGE"):
-                    if (textureSlot.use_map_color_diffuse or textureSlot.use_map_diffuse and (
+            for texture_slot in []: # material.texture_slots:
+                if texture_slot and texture_slot.use and (texture_slot.texture.type == "IMAGE"):
+                    if (texture_slot.use_map_color_diffuse or texture_slot.use_map_diffuse and (
                             not diffuse_texture)):
-                        diffuse_texture = textureSlot
+                        diffuse_texture = texture_slot
                     elif (
-                                textureSlot.use_map_color_spec or textureSlot.use_map_specular and (
+                                texture_slot.use_map_color_spec or texture_slot.use_map_specular and (
                                     not specular_texture)):
-                        specular_texture = textureSlot
-                    elif textureSlot.use_map_emit and (not emission_texture):
-                        emission_texture = textureSlot
-                    elif textureSlot.use_map_translucency and (not transparency_texture):
-                        transparency_texture = textureSlot
-                    elif textureSlot.use_map_normal and (not normal_texture):
-                        normal_texture = textureSlot
+                        specular_texture = texture_slot
+                    elif texture_slot.use_map_emit and (not emission_texture):
+                        emission_texture = texture_slot
+                    elif texture_slot.use_map_translucency and (not transparency_texture):
+                        transparency_texture = texture_slot
+                    elif texture_slot.use_map_normal and (not normal_texture):
+                        normal_texture = texture_slot
 
             if diffuse_texture:
                 textures.append(self.export_texture(diffuse_texture, B"diffuse"))
@@ -1852,10 +1860,10 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
         self.document.structures.extend(self.export_metrics(scene))
 
         # export the worlds ambient color, if enabled
-        if self.export_ambient:
-            self.document.structures.append(Extension(type=B"AmbientColor", children=[
-                DdlPrimitive(DataType.float, data=[scene.world.ambient_color], vector_size=3)
-            ]))
+        # if self.export_ambient:
+        #     self.document.structures.append(Extension(type=B"AmbientColor", children=[
+        #         DdlPrimitive(DataType.float, data=[scene.world.ambient_color], vector_size=3)
+        #     ]))
 
         original_frame = scene.frame_current
         original_subframe = scene.frame_subframe
@@ -1903,7 +1911,7 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
         layout = self.layout
 
         col = layout.column()
-        col.label("General")
+        col.label(text="General")
         col.prop(self, "export_selection")
         col.prop(self, "sample_animation")
         col.prop(self, "export_image_textures")
@@ -1912,16 +1920,16 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
             col.prop(self, "image_format")
         col.separator()
 
-        col.label("Extensions")
+        col.label(text="Extensions")
         col.prop(self, "export_custom_properties")
         col.prop(self, "export_physics")
-        col.prop(self, "export_ambient")
+        #col.prop(self, "export_ambient")
         col.prop(self, "export_audio")
         if self.export_audio:
             col.prop(self, "audio_path_prefix")
         col.separator()
 
-        col.label("Advanced")
+        col.label(text="Advanced")
         col.prop(self, "rounding")
         col.prop(self, "export_only_first_material")
         col.prop(self, "image_path_prefix")

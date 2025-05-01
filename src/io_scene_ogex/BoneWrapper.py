@@ -1,6 +1,6 @@
-from io_scene_ogex.BaseWrapper import BaseWrapper
+from .BaseWrapper import BaseWrapper
 
-from io_scene_ogex.ExporterState import *
+from .ExporterState import *
 
 __author__ = 'Eric Lengyel, Jonathan Hale, Nicolas Wehrle'
 

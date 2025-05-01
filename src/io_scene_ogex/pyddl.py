@@ -1,6 +1,7 @@
 from abc import abstractmethod
 import math
 from enum import Enum
+import bpy
 
 __author__ = "Jonathan Hale"
 __version__ = "0.1.0"
@@ -126,9 +127,9 @@ class DdlDocument:
     """
 
     def __init__(self):
-        self.structures = []
+        self.structures: list[DdlStructure] = []
 
-    def add_structure(self, identifier, name=None, children=[], props=dict()):
+    def add_structure(self, identifier, name=None, children=[], props=dict()) -> DdlStructure:
         """
         Add a substructure
         :param identifier: structure identifier
@@ -175,7 +176,7 @@ class DdlTextWriter(DdlWriter):
     OpenDdlWriter which writes OpenDdlDocuments in human-readable text form.
     """
 
-    def __init__(self, document, rounding=6):
+    def __init__(self, document: DdlDocument, rounding=6):
         """
         Constructor
         :param document: document to write
@@ -356,9 +357,16 @@ class DdlTextWriter(DdlWriter):
                              [data[i:i + n] for i in range(0, len(data), n)]  # group generator
                              ]) + B"}\n"))
                     else:
-                        lines.append(self.indent + B"{" + ((B"},\n" + self.indent + B"{").join(
-                            [(B"}, {".join(B", ".join(map(to_bytes, vec)) for vec in group)) for group in
-                             [data[i:i + n] for i in range(0, len(data), n)]])) + B"}\n")
+                        items = []
+                        groups =  [data[i:i + n] for i in range(0, len(data), n)]
+                        for group in groups:
+                            vecs_bytes = []
+                            for vec in group:
+                                vecs_bytes.append(B", ".join(map(to_bytes, vec)))
+                            item = B"}, {".join(vecs_bytes)
+                            items.append(item)
+                        curr_line = self.indent + B"{" + ((B"},\n" + self.indent + B"{").join(items)) + B"}\n"
+                        lines.append(curr_line)
                 else:
                     lines.append(self.indent + B"{" + (B"}, {".join(
                         B", ".join(map(to_bytes, vec)) for vec in primitive.data)) + B"}\n")
