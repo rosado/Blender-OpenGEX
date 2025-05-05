@@ -4,6 +4,8 @@ import time
 from mathutils import Matrix
 from bpy_extras.io_utils import ExportHelper
 
+from .BoneWrapper import BoneWrapper
+
 from .utils import uv_map_attributes, uv_map_attributes_via_uv_layers
 from .NodeWrapper import NodeWrapper
 from .ExporterState import *
@@ -478,12 +480,14 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
         delta_rot_animated = [False, False, False]
         delta_scl_animated = [False, False, False]
 
-        mode = node.rotation_mode
+        # bpy.types.Bone objects do not have "rotation_mode"
+        mode = getattr(node, "rotation_mode", None)
         sampled_animation = (self.container.sampleAnimation or (mode == "QUATERNION") or (mode == "AXIS_ANGLE"))
 
         structs = []
+        node_animation_data = getattr(node, "animation_data", None)
 
-        if (not sampled_animation) and node.animation_data:
+        if (not sampled_animation) and node_animation_data:
             action = node.animation_data.action
             if action:
                 for fcurve in action.fcurves:
@@ -554,7 +558,8 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
             # If there's no keyframe animation at all, then write the node transform as a single 4x4 matrix.
             # We might still be exporting sampled animation below.
             transformation = node.matrix_local
-            if node.type == 'CAMERA':
+            node_type = getattr(node, "type", None)
+            if node_type == 'CAMERA':
                 # handle Blenders unusual downward-facing camera rest pose
                 transformation = transformation * Matrix.Rotation(math.radians(-90.0), 4, 'X')
 
@@ -601,8 +606,8 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
                 (B"end", (action.frame_range[1] - self.container.beginFrame) * self.container.frameTime)
             ]))
 
-            delta_translation = node.delta_location
-            if delta_position_animated:
+            delta_translation = getattr(node, "delta_location", None)
+            if delta_position_animated and delta_translation is not None:
 
                 # When the delta location is animated, write the x, y, and z components separately
                 # so they can be targeted by different tracks having different sets of keys.
@@ -616,13 +621,13 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
                             self.export_animation_track(delta_pos_anim_curve[i], delta_pos_anim_kind[i], structs[-1])
                         )
 
-            elif ((math.fabs(delta_translation[0]) > k_export_epsilon) or (
+            elif delta_translation is not None and ((math.fabs(delta_translation[0]) > k_export_epsilon) or (
                         math.fabs(delta_translation[1]) > k_export_epsilon) or (
                         math.fabs(delta_translation[2]) > k_export_epsilon)):
                 structs.append(Translation(value=delta_translation, vector_size=3))
 
-            translation = node.location
-            if position_animated:
+            translation = getattr(node, "location", None)
+            if position_animated and translation is not None:
                 # When the location is animated, write the x, y, and z components separately
                 # so they can be targeted by different tracks having different sets of keys.
                 for i in range(3):
@@ -634,120 +639,124 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
                             self.export_animation_track(pos_anim_curve[i], pos_anim_kind[i], structs[-1])
                         )
 
-            elif ((math.fabs(translation[0]) > k_export_epsilon) or (math.fabs(translation[1]) > k_export_epsilon) or (
+            elif translation is not None and ((math.fabs(translation[0]) > k_export_epsilon) or (math.fabs(translation[1]) > k_export_epsilon) or (
                         math.fabs(translation[2]) > k_export_epsilon)):
                 structs.append(Translation(value=translation, vector_size=3))
+                
 
-            if delta_rotation_animated:
+            if not isinstance(node, bpy.types.Bone):
+                node_delta_rotation_euler = getattr(node, "delta_rotation_euler", None)
+                node_delta_rotation_quaternion = getattr(node, "delta_rotation_quaternion", None)
+                if delta_rotation_animated and node_delta_rotation_euler is not None:
 
-                # When the delta rotation is animated, write three separate Euler angle rotations
-                # so they can be targeted by different tracks having different sets of keys.
+                    # When the delta rotation is animated, write three separate Euler angle rotations
+                    # so they can be targeted by different tracks having different sets of keys.
 
-                for i in range(3):
-                    axis = ord(mode[2 - i]) - 0x58
-                    angle = node.delta_rotation_euler[axis]
-                    if (delta_rot_animated[axis]) or (math.fabs(angle) > k_export_epsilon):
-                        structs.append(Rotation(name=B"d" + axis_name[axis] + B"rot", kind=axis_name[axis], value=angle))
-                    if delta_rot_animated[i]:
-                        animation_struct.children.append(
-                            self.export_animation_track(delta_rot_anim_curve[i], delta_rot_anim_kind[i], structs[-1])
-                        )
-
-            else:
-
-                # When the delta rotation is not animated, write it in the representation given by
-                # the node's current rotation mode. (There is no axis-angle delta rotation.)
-
-                if mode == "QUATERNION":
-                    quaternion = node.delta_rotation_quaternion
-                    if ((math.fabs(quaternion[0] - 1.0) > k_export_epsilon) or (
-                                math.fabs(quaternion[1]) > k_export_epsilon) or (
-                                math.fabs(quaternion[2]) > k_export_epsilon) or (
-                                math.fabs(quaternion[3]) > k_export_epsilon)):
-                        structs.append(Translation(value=quaternion, kind=B"quaternion", vector_size=4))
-
-                else:
                     for i in range(3):
                         axis = ord(mode[2 - i]) - 0x58
                         angle = node.delta_rotation_euler[axis]
-                        if math.fabs(angle) > k_export_epsilon:
-                            structs.append(Rotation(kind=axis_name[axis], value=angle))
-
-            if rotation_animated:
-
-                # When the rotation is animated, write three separate Euler angle rotations
-                # so they can be targeted by different tracks having different sets of keys.
-
-                for i in range(3):
-                    axis = ord(mode[2 - i]) - 0x58
-                    angle = node.rotation_euler[axis]
-                    if rot_animated[axis] or (math.fabs(angle) > k_export_epsilon):
-                        structs.append(Rotation(name=axis_name[axis] + B"rot", kind=axis_name[axis], value=angle))
-                    if rot_animated[i]:
-                        animation_struct.children.append(
-                            self.export_animation_track(rot_anim_curve[i], rot_anim_kind[i], structs[-1])
-                        )
-
-            else:
-
-                # When the rotation is not animated, write it in the representation given by
-                # the node's current rotation mode.
-
-                if mode == "QUATERNION":
-                    quaternion = node.rotation_quaternion
-                    if ((math.fabs(quaternion[0] - 1.0) > k_export_epsilon) or (
-                                math.fabs(quaternion[1]) > k_export_epsilon) or (
-                                math.fabs(quaternion[2]) > k_export_epsilon) or (
-                                math.fabs(quaternion[3]) > k_export_epsilon)):
-                        structs.append(Translation(value=quaternion, kind=B"quaternion", vector_size=4))
-
-                elif mode == "AXIS_ANGLE":
-                    if math.fabs(node.rotation_axis_angle[0]) > k_export_epsilon:
-                        structs.append(Translation(value=node.rotation_axis_angle, kind=B"axis", vector_size=4))
+                        if (delta_rot_animated[axis]) or (math.fabs(angle) > k_export_epsilon):
+                            structs.append(Rotation(name=B"d" + axis_name[axis] + B"rot", kind=axis_name[axis], value=angle))
+                        if delta_rot_animated[i]:
+                            animation_struct.children.append(
+                                self.export_animation_track(delta_rot_anim_curve[i], delta_rot_anim_kind[i], structs[-1])
+                            )
 
                 else:
+
+                    # When the delta rotation is not animated, write it in the representation given by
+                    # the node's current rotation mode. (There is no axis-angle delta rotation.)
+
+                    if mode == "QUATERNION" and node_delta_rotation_quaternion is not None:
+                        quaternion = node_delta_rotation_quaternion
+                        if ((math.fabs(quaternion[0] - 1.0) > k_export_epsilon) or (
+                                    math.fabs(quaternion[1]) > k_export_epsilon) or (
+                                    math.fabs(quaternion[2]) > k_export_epsilon) or (
+                                    math.fabs(quaternion[3]) > k_export_epsilon)):
+                            structs.append(Translation(value=quaternion, kind=B"quaternion", vector_size=4))
+
+                    elif node_delta_rotation_euler is not None:
+                        for i in range(3):
+                            axis = ord(mode[2 - i]) - 0x58
+                            angle = node_delta_rotation_euler[axis]
+                            if math.fabs(angle) > k_export_epsilon:
+                                structs.append(Rotation(kind=axis_name[axis], value=angle))
+
+                if rotation_animated:
+
+                    # When the rotation is animated, write three separate Euler angle rotations
+                    # so they can be targeted by different tracks having different sets of keys.
+
                     for i in range(3):
                         axis = ord(mode[2 - i]) - 0x58
                         angle = node.rotation_euler[axis]
-                        if math.fabs(angle) > k_export_epsilon:
-                            structs.append(Rotation(kind=axis_name[axis], value=angle))
+                        if rot_animated[axis] or (math.fabs(angle) > k_export_epsilon):
+                            structs.append(Rotation(name=axis_name[axis] + B"rot", kind=axis_name[axis], value=angle))
+                        if rot_animated[i]:
+                            animation_struct.children.append(
+                                self.export_animation_track(rot_anim_curve[i], rot_anim_kind[i], structs[-1])
+                            )
 
-            delta_scale = node.delta_scale
-            if delta_scale_animated:
+                else:
 
-                # When the delta scale is animated, write the x, y, and z components separately
-                # so they can be targeted by different tracks having different sets of keys.
+                    # When the rotation is not animated, write it in the representation given by
+                    # the node's current rotation mode.
 
-                for i in range(3):
-                    scl = delta_scale[i]
-                    if delta_scl_animated[i] or (math.fabs(scl) > k_export_epsilon):
-                        structs.append(Scale(name=B"d" + axis_name[i] + B"scl", kind=axis_name[i], value=scl))
-                    if delta_scl_animated[i]:
-                        animation_struct.children.append(
-                            self.export_animation_track(delta_scale_anim_curve[i], delta_scale_anim_kind[i], structs[-1])
-                        )
+                    if mode == "QUATERNION":
+                        quaternion = node.rotation_quaternion
+                        if ((math.fabs(quaternion[0] - 1.0) > k_export_epsilon) or (
+                                    math.fabs(quaternion[1]) > k_export_epsilon) or (
+                                    math.fabs(quaternion[2]) > k_export_epsilon) or (
+                                    math.fabs(quaternion[3]) > k_export_epsilon)):
+                            structs.append(Translation(value=quaternion, kind=B"quaternion", vector_size=4))
 
-            elif ((math.fabs(delta_scale[0] - 1.0) > k_export_epsilon) or (
-                        math.fabs(delta_scale[1] - 1.0) > k_export_epsilon) or (
-                        math.fabs(delta_scale[2] - 1.0) > k_export_epsilon)):
-                structs.append(Scale(value=delta_scale, vector_size=3))
+                    elif mode == "AXIS_ANGLE":
+                        if math.fabs(node.rotation_axis_angle[0]) > k_export_epsilon:
+                            structs.append(Translation(value=node.rotation_axis_angle, kind=B"axis", vector_size=4))
 
-            scale = node.scale
-            if scale_animated:
-                # When the scale is animated, write the x, y, and z components separately
-                # so they can be targeted by different tracks having different sets of keys.
-                for i in range(3):
-                    scl = scale[i]
-                    if scl_animated[i] or (math.fabs(scl) > k_export_epsilon):
-                        structs.append(Scale(name=axis_name[i] + B"scl", kind=axis_name[i], value=scl))
-                    if scl_animated[i]:
-                        animation_struct.children.append(
-                            self.export_animation_track(scale_anim_curve[i], scale_anim_kind[i], structs[-1])
-                        )
+                    else:
+                        for i in range(3):
+                            axis = ord(mode[2 - i]) - 0x58
+                            angle = node.rotation_euler[axis]
+                            if math.fabs(angle) > k_export_epsilon:
+                                structs.append(Rotation(kind=axis_name[axis], value=angle))
 
-            elif ((math.fabs(scale[0] - 1.0) > k_export_epsilon) or (math.fabs(scale[1] - 1.0) > k_export_epsilon) or (
-                        math.fabs(scale[2] - 1.0) > k_export_epsilon)):
-                structs.append(Scale(value=scl, vector_size=3))
+                delta_scale = node.delta_scale
+                if delta_scale_animated:
+
+                    # When the delta scale is animated, write the x, y, and z components separately
+                    # so they can be targeted by different tracks having different sets of keys.
+
+                    for i in range(3):
+                        scl = delta_scale[i]
+                        if delta_scl_animated[i] or (math.fabs(scl) > k_export_epsilon):
+                            structs.append(Scale(name=B"d" + axis_name[i] + B"scl", kind=axis_name[i], value=scl))
+                        if delta_scl_animated[i]:
+                            animation_struct.children.append(
+                                self.export_animation_track(delta_scale_anim_curve[i], delta_scale_anim_kind[i], structs[-1])
+                            )
+
+                elif ((math.fabs(delta_scale[0] - 1.0) > k_export_epsilon) or (
+                            math.fabs(delta_scale[1] - 1.0) > k_export_epsilon) or (
+                            math.fabs(delta_scale[2] - 1.0) > k_export_epsilon)):
+                    structs.append(Scale(value=delta_scale, vector_size=3))
+
+                scale = node.scale
+                if scale_animated:
+                    # When the scale is animated, write the x, y, and z components separately
+                    # so they can be targeted by different tracks having different sets of keys.
+                    for i in range(3):
+                        scl = scale[i]
+                        if scl_animated[i] or (math.fabs(scl) > k_export_epsilon):
+                            structs.append(Scale(name=axis_name[i] + B"scl", kind=axis_name[i], value=scl))
+                        if scl_animated[i]:
+                            animation_struct.children.append(
+                                self.export_animation_track(scale_anim_curve[i], scale_anim_kind[i], structs[-1])
+                            )
+
+                elif ((math.fabs(scale[0] - 1.0) > k_export_epsilon) or (math.fabs(scale[1] - 1.0) > k_export_epsilon) or (
+                            math.fabs(scale[2] - 1.0) > k_export_epsilon)):
+                    structs.append(Scale(value=scl, vector_size=3))
 
             structs.append(animation_struct)
 
@@ -763,20 +772,21 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
         return m
 
     def export_bone_transform(self, nw, bw, scene):
-        # TODO doc!
         """
         :return: a Transform DdlStructure
         """
 
-        curve_array = self.export_bone_animation(nw.item, bw.item.name)
-        animation = ((len(curve_array) != 0) or self.container.sampleAnimationFlag)
+        # TODO(rosado): we need to access the armature here - it holds the `animation_data`
+        curve_array = [] #self.export_bone_animation(nw.item, bw.item.name)
+        animation = ((len(curve_array) != 0) or self.container.sampleAnimation)
 
         transform = bw.item.matrix_local.copy()
         parent_bone_wrapper = bw.parent
         if parent_bone_wrapper and (math.fabs(parent_bone_wrapper.item.matrix_local.determinant()) > k_export_epsilon):
             transform = parent_bone_wrapper.item.matrix_local.inverted() * transform
 
-        pose_bone = nw.item.pose.bones.get(bw.item.name)
+        # TODO(rosado): `Bone` does not have a `pose` property
+        pose_bone = None # nw.item.pose.bones.get(bw.item.name)
         if pose_bone:
             transform = pose_bone.matrix.copy()
             parent_pose_bone = pose_bone.parent
@@ -860,7 +870,7 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
 
                 fcurve = curve_array[a]
                 kind = OpenGexExporter.classify_animation_curve(fcurve)
-                if (kind != k_animation_sampled) and (not self.container.sampleAnimationFlag):
+                if (kind != k_animation_sampled) and (not self.container.sampleAnimation):
                     animation_struct.children.append(self.export_animation_track(fcurve, kind, target))
                 else:
                     animation_struct.children.append(
@@ -869,26 +879,27 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
             self.dec_indent()
             self.indent_write(B"}\n")
 
-    def export_bone(self, nw, bw, scene):  # armature, bone, scene):
+    def export_bone(self, nw: NodeWrapper, bw, scene):  # armature, bone, scene):
+        # TODO(rosado): verify we can get pose bones from `nw.item`
         bone_struct = None
         structs = []
+        target_structs = structs
 
         if nw.nodeRef:
-            bone_struct = DdlStructure(struct_identifiers[nw.nodeRef["nodeType"]], name=nw.nodeRef["structName"],
+            bone_struct = DdlStructure(struct_identifiers[bw.nodeRef["nodeType"]], name=bw.nodeRef["structName"],
                                        children=[Name(name=bw.item.name)])
             structs.append(bone_struct)
             nw.nodeRef["struct"] = bone_struct
 
             bone_struct.children.append(self.export_bone_transform(nw, bw, scene))
 
-            for child in bw.children:
-                bone_struct.children.extend(self.export_bone(nw, child, scene))
-        else:
-            for child in bw.children:
-                structs.extend(self.export_bone(nw, child, scene))
+            target_structs = bone_struct.children
+        
+        for child in bw.children:
+            target_structs.extend(self.export_bone(nw, child, scene))
 
         # Export any ordinary nodes that are parented to this bone.
-        bone_subnode_array = self.container.boneParent_array.get(bw.item.name)
+        bone_subnode_array = self.container.bone_subnodes.get(bw.item.name)
         if bone_subnode_array:
             pose_bone = None
             if not bw.item.use_relative_parent:
@@ -896,14 +907,15 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
 
             for subnode_wrapper in bone_subnode_array:
                 node = self.export_node(subnode_wrapper, scene, pose_bone)
-                if bone_struct is None:
-                    structs.append(node)
-                else:
-                    bone_struct.children.append(node)
+                target_structs.append(node)
+                # if bone_struct is None:
+                #     structs.append(node)
+                # else:
+                #     bone_struct.children.append(node)
 
         return structs
 
-    def export_node(self, nw, scene, pose_bone=None):
+    def export_node(self, nw: NodeWrapper, scene, pose_bone=None):
 
         # This function exports a single node in the scene and includes its name,
         # object reference, material references (for geometries), and transform.
@@ -912,7 +924,6 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
         if nw.nodeRef:
 
             # Export the object reference and material references.
-            obj = nw.item.data
             node_type = nw.nodeRef["nodeType"]
 
             if node_type == NodeType.geometry:
@@ -941,9 +952,9 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
             nw.nodeRef["struct"] = struct
 
             if node_type == NodeType.light:
-                struct.children.append(ObjectRef(ref_object=self.export_light(nw.item, obj)))
+                struct.children.append(ObjectRef(ref_object=self.export_light(nw.item, nw.item.data)))
             elif node_type == NodeType.camera:
-                struct.children.append(ObjectRef(ref_object=self.export_camera(nw.item, obj)))
+                struct.children.append(ObjectRef(ref_object=self.export_camera(nw.item, nw.item.data)))
 
             if pose_bone:
                 # If the node is parented to a bone and is not relative, then undo the bone's transform.
@@ -952,11 +963,13 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
 
             # Export the transform. If the node is animated, then animation tracks are exported here.
             struct.children.extend(self.export_node_transformation(nw, scene))
+            
+            if isinstance(nw, BoneWrapper):
+                for bw in nw.children:
+                    if isinstance(bw, BoneWrapper):
+                        struct.children.extend(self.export_bone(nw, bw, scene))
 
-            if nw.bones:
-                for bw in nw.bones:
-                    self.export_bone(nw, bw, scene)  # TODO
-
+        # TODO(rosado): can/should this be replaced with rigid body metadata?
         # export physics properties
         if self.export_physics:
             if nw.item.game.physics_type != 'NO_COLLISION' and (nw.item.parent is None or not nw.item.parent.game.use_collision_compound):
@@ -970,7 +983,7 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
             struct.children.append(self.export_audio_properties(nw.item.data))
 
         for subnode in nw.children:
-            if subnode.parent.item.type != "BONE":
+            if not isinstance(subnode.parent.item, bpy.types.Bone):
                 substructure = self.export_node(subnode, scene)
                 struct.children.append(substructure)
                 substructure = None
@@ -1163,6 +1176,7 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
 
         if constraint.target is not None:
             # FIXME: Name is not unique! Because of linked objects there can be more that one object with the same name
+            # NOTE(rosado): possibly include `node.library.filepath` in the name to ensure uniqueness
             target_struct = Extension(B"PC/target", children=[
                 DdlPrimitive(DataType.ref, data=[constraint.target.name])
             ])
@@ -1309,12 +1323,17 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
             Transform(node.matrix_world)
         ])
 
+        bone_ref_children = []
+        transform_matrices = []
+        for bone in armature.data.bones:
+            primitive = DdlPrimitive(data_type=DataType.ref, data=[self.find_node(bone.name)[1]["struct"]])
+            matrix = armature.matrix_world * bone.matrix_local
+            bone_ref_children.append(primitive)
+            transform_matrices.append(matrix)
+
         skeleton_struct = DdlStructure(B"Skeleton", children=[
-            DdlStructure(B"BoneRefArray", children=[
-                DdlPrimitive(data_type=DataType.ref, data=[self.find_node(bone.name)[1]["struct"]
-                                                           for bone in armature.data.bones])
-            ]),
-            Transform(matrices=[armature.matrix_world * bone.matrix_local for bone in armature.data.bones])
+            DdlStructure(B"BoneRefArray", children=bone_ref_children),
+            Transform(matrices=transform_matrices)
         ])
         skin_struct.children.append(skeleton_struct)
 
@@ -1852,7 +1871,7 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
             self.image_path_prefix = path_prefix
 
         self.document = DdlDocument()
-        scene = context.scene
+        scene: bpy.types.Scene = context.scene
 
         export_all_flag = not self.export_selection
         self.container = ExporterState(export_all_flag, self.sample_animation, scene)

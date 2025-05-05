@@ -2,6 +2,7 @@ from enum import IntEnum
 
 from collections import OrderedDict
 
+
 __author__ = 'Eric Lengyel, Jonathan Hale, Nicolas Wehrle'
 
 
@@ -18,7 +19,7 @@ class ExporterState:
         self.nodes = []
         self.exportAll = export_all
         self.sampleAnimation = sample_animation
-        self.boneParentArray = {}
+        self.bone_subnodes: dict[str, any] = {}
 
         self.beginFrame = scene.frame_start
         self.endFrame = scene.frame_end

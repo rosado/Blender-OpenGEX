@@ -8,7 +8,7 @@ from tests import TestUtils
 
 __author__ = 'Jonathan Hale'
 
-
+@unittest.skip("No ambient light in Blender 4.4")
 class AmbientTest(TestUtils.OgexExporterTest):
 
     # name of the output file

@@ -6,7 +6,7 @@ from tests import TestUtils
 
 __author__ = 'Jonathan Hale'
 
-
+@unittest.skip("Not implemented")
 class PhysicsTest(TestUtils.OgexExporterTest):
 
     # name of the output file

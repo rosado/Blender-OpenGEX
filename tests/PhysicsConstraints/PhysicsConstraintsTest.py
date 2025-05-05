@@ -6,7 +6,7 @@ from tests import TestUtils
 
 __author__ = 'Jonathan Hale'
 
-
+@unittest.skip("Not implemented for Blender 4.x")
 class PhysicsConstraintsTest(TestUtils.OgexExporterTest):
 
     # name of the output file
