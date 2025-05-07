@@ -1610,7 +1610,7 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
             for texcoords in export_mesh["texcoord"].values():
                 name = B'texcoord'
                 if count > 0:
-                    name += B'[' + self.to_int_byte(count) + B']'
+                    name += B'[' + bytes(str(count), "UTF-8") + B']'
 
                 mesh_struct.children.append(
                     VertexArray(attrib=name, vertex_count=vertex_count, data=texcoords, vector_size=2))
