@@ -1579,9 +1579,9 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
         m.edges.ensure_lookup_table()
 
         # cleanup loose edges and vertices
-        tmp_geom = [v for v in m.verts if len(v.link_faces) == 0]
-        bmesh.ops.delete(m, geom=tmp_geom, context="VERTS")  #(m, geom=[v for v in m.verts if len(v.link_faces) == 0], context=1)  # 1 <=> DEL_VERTS
-        bmesh.ops.delete(m, geom=tmp_geom, context="EDGES")
+        #tmp_geom = [v for v in m.verts if (v.is_valid and len(v.link_faces) == 0)]
+        bmesh.ops.delete(m, geom=[v for v in m.verts if (v.is_valid and len(v.link_faces) == 0)], context="EDGES")
+        bmesh.ops.delete(m, geom=[v for v in m.verts if (v.is_valid and len(v.link_faces) == 0)], context="VERTS")
 
         uv_layers = [l for l in mesh.uv_layers] if mesh.uv_layers.active else []
         uv_attrs = uv_map_attributes_via_uv_layers(mesh)
