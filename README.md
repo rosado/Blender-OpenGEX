@@ -1,6 +1,6 @@
-Travis [![Build Status](https://travis-ci.org/Squareys/Blender-OpenGEX.svg?branch=master)](https://travis-ci.org/Squareys/Blender-OpenGEX)
 # Blender-OpenGEX
-"Inofficial OpenGEX Exporter" for Blender 2.7x, based on the original exporter code by Eric Lengyel (can be found at http://opengex.org/).
+"OpenGEX Exporter" for Blender 4.4 x, based on the original exporter code by Jonathan Hale, which in turn was based 
+on original code by Eric Lengyel (can be found at http://opengex.org/).
 
 # How to install
 
@@ -40,6 +40,7 @@ OpenGEX Exporter Addon versions are built up as:
 Copyright © 2015, 2016 Jonathan Hale
 Copyright © 2015 Terathon Software LLC
 Copyright © 2015 Nicolas Wehrle
+Copyright © 2025 Roland Sadowski
 
 This software is licensed under the Creative Commons
 Attribution-ShareAlike 3.0 Unported License:
