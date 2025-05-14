@@ -1090,12 +1090,12 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
 
         if collision_group != 0x01:
             struct.children.append(Extension(B"PM/collision_group", children=[
-                DdlPrimitive(DataType.unsigned_int16, data=[collision_group])
+                DdlPrimitive(DataType.uint16, data=[collision_group])
             ]))
 
         if collision_mask != 0xFF:
             struct.children.append(Extension(B"PM/collision_mask", children=[
-                DdlPrimitive(DataType.unsigned_int16, data=[collision_mask])
+                DdlPrimitive(DataType.uint16, data=[collision_mask])
             ]))
 
         if props.use_collision_bounds and props.physics_type not in {'NAVMESH', 'OCCLUDER'}:
@@ -1376,10 +1376,10 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
         # Write the bone count array. There is one entry per vertex.
 
         skin_struct.children.append(DdlStructure(B"BoneCountArray", children=[
-            DdlPrimitive(data_type=DataType.unsigned_int16, data=bone_count_array)
+            DdlPrimitive(data_type=DataType.uint16, data=bone_count_array)
         ]))
         skin_struct.children.append(DdlStructure(B"BoneIndexArray", children=[
-            DdlPrimitive(data_type=DataType.unsigned_int16, data=bone_index_array)
+            DdlPrimitive(data_type=DataType.uint16, data=bone_index_array)
         ]))
         skin_struct.children.append(DdlStructure(B"BoneWeightArray", children=[
             DdlPrimitive(data_type=DataType.float, data=bone_weight_array)
@@ -1655,7 +1655,7 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
                 mesh_struct.add_structure(B"IndexArray", props=props, children=[
                     DdlTextWriter.set_max_elements_per_line(
                         DdlTextWriter.set_comment(
-                            DdlPrimitive(DataType.unsigned_int32, vector_size=3, data=indices), comment=str(num_tris)),
+                            DdlPrimitive(DataType.uint32, vector_size=3, data=indices), comment=str(num_tris)),
                         elements=16)
                 ])
 
