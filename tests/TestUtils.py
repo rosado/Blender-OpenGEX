@@ -5,12 +5,19 @@ import unittest
 
 import io_scene_ogex
 
-__author__ = 'Jonathan Hale'
+import tests.oddl.oddl as oddl
+
+__author__ = 'Jonathan Hale, Roland Sadowski'
 
 
 class OgexExporterTest(unittest.TestCase):
 
     no_delete = False
+    
+    @staticmethod
+    def base_dir_for(file):
+        """Pass __file__"""
+        return os.path.dirname(os.path.realpath(file))
 
     @classmethod
     def setUpClass(self):
@@ -21,8 +28,18 @@ class OgexExporterTest(unittest.TestCase):
         io_scene_ogex.unregister()
 
     def tearDown(self):
-        if os.path.isfile(self.filename) and not self.no_delete:
-            os.remove(self.filename)
+        files = []
+        if hasattr(self, "filename"):
+            if os.path.isfile(self.filename) and not self.no_delete:
+                files.append(self.filename)
+        
+        if hasattr(self, "output_file_name"):
+            full_path = self.file_path(self.output_file_name)
+            if os.path.isfile(full_path) and not self.no_delete:
+                files.append(full_path)
+
+        for f in files:
+            os.remove(f)
 
     def readContents(self, filename):
         """
@@ -49,6 +66,17 @@ class OgexExporterTest(unittest.TestCase):
         self.fail('Failing on purpose, tests need updating')
 
     def file_path(self, file_name) -> pathlib.Path:
+        """Returns path to file in directory of currently executing test.
+        Expects self.base_dir to be set"""
         return pathlib.Path(self.base_dir) / file_name
+    
+    
+    def parse_ogex_file(self, path: pathlib.Path) -> list[oddl.Structure]:
+        with open(path, "r") as f:
+            ogex_str = f.read()
+        
+        ctx = oddl.ParseContext(ogex_str)
+        stream = list(oddl.parse_as_stream(ctx))
+        return oddl.parse_stream(stream)
         
 
