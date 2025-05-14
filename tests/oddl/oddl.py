@@ -418,7 +418,8 @@ def parse_dt_struct(items):
     (elems_taken, result) = match_pattern(patterns, items)
     if result is not None:
         if result.data_type.element_size is not None:
-            result.content = DataArrayList(result.content.content, result.data_type.element_size)
+            array_content = [DataList(children.content) for children in result.content.content]
+            result.content = DataArrayList(array_content, result.data_type.element_size)
         else:
             result.content = DataList(result.content.content)
     return (elems_taken, result)

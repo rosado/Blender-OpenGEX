@@ -104,3 +104,11 @@ FooNode $node1 {
 	}
 }
 """
+
+DATA_LIST_1 = """
+SomeNode { u32 { 1, 2, 3, 4} }
+"""
+
+DATA_ARRAY_LIST_1 = """
+SomeNode { float[1] { { 1.0 } { 2.0 } } }
+"""

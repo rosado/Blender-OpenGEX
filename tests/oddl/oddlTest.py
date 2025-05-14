@@ -26,9 +26,26 @@ from .examples import (
     VERT_ARRAY_NORMAL,
     VERT_ARRAY_TEXCOORD,
     INDEX_ARRAY,
-    FIND_BY_REF
+    FIND_BY_REF,
+    DATA_LIST_1,
+    DATA_ARRAY_LIST_1
 )
 import re
+
+
+# set those to valid paths to different text files that you can
+# load in a diffing tool
+#COMPARE_LEFT, COMPARE_RIGHT = None, None
+
+COMPARE_LEFT = r"C:\Users\roland\dev\COMPARE_LEFT"
+COMPARE_RIGHT = r"C:\Users\roland\dev\COMPARE_RIGHT"
+
+def dump_for_comparison(left, right):
+    if COMPARE_LEFT is not None and COMPARE_RIGHT is not None:
+        with open(COMPARE_LEFT, "w") as file_left:
+            file_left.write(left)
+        with open(COMPARE_RIGHT, "w") as file_right:
+            file_right.write(right)
 
 def data_list_contents(s) -> list[list[NumericLiteral]]:
     pattern = r"\{([^}]+)\}"
@@ -141,19 +158,19 @@ class OGEXTests(TestCase):
         self.assertEqual(parsed[0].identifier.name, 'GeometryObject') 
 
         position_data_list = DataArrayList(list=[
-            Children(content=vert) for vert in data_list_contents(VERT_ARRAY_POS)
+            DataList(vert) for vert in data_list_contents(VERT_ARRAY_POS)
         ], array_size=3)
 
         normal_data_list = DataArrayList(list=[
-            Children(content=vert) for vert in data_list_contents(VERT_ARRAY_NORMAL)
+            DataList(vert) for vert in data_list_contents(VERT_ARRAY_NORMAL)
         ], array_size=3)
 
         texcoord_data_list = DataArrayList(list=[
-            Children(content=vert) for vert in data_list_contents(VERT_ARRAY_TEXCOORD)
+            DataList(vert) for vert in data_list_contents(VERT_ARRAY_TEXCOORD)
         ], array_size=2)
 
         index_data_list = DataArrayList(list=[
-            Children(content=vert) for vert in data_list_contents(INDEX_ARRAY)
+            DataList(vert) for vert in data_list_contents(INDEX_ARRAY)
         ], array_size=3)
 
         position_vert_array = Structure.from_identifier(
@@ -215,6 +232,7 @@ class OGEXTests(TestCase):
             name=Name('geometry1', 'global'),
             content=Children([mesh_node])
         )
+        
         self.assertEqual(parsed[0], expected)
     
     def test_parse_reference_1(self):
@@ -249,11 +267,38 @@ class OGEXTests(TestCase):
         ]))
         
         self.assertEqual(found.name, Name("bar1", 'local'))
+    
+
+    def test_data_list(self):
+        ctx = ParseContext(DATA_LIST_1)
+        nodes = list(parse_as_stream(ctx))
+        parsed = oddl.parse_stream(nodes)[0]
+        expected = Structure.from_identifier(
+            Identifier("SomeNode"),
+            content=Children([
+                Structure.from_data_type(DataType(name="u32"),
+                                         content=DataList([NumericLiteral(str(i)) for i in range(1, 5)]))
+            ])
+        )
+        self.assertEqual(parsed, expected)
 
 
+    def test_data_array_list_structure(self):
+        ctx = ParseContext(DATA_ARRAY_LIST_1)
+        nodes = list(parse_as_stream(ctx))
+        parsed = oddl.parse_stream(nodes)[0]
+        expected = Structure.from_identifier(
+            Identifier("SomeNode"),
+            content=Children([
+                Structure.from_data_type(DataType(name="float", element_size=1),
+                                         content=DataArrayList(
+                                             [DataList([NumericLiteral(str(i*1.0))]) for i in range(1, 3)],
+                                             array_size=1))
+            ])
+        )
+        self.assertIsNotNone(parsed)
 
-        
-        
+
 
 
         

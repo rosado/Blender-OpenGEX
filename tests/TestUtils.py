@@ -1,5 +1,6 @@
 
 import os
+import pathlib
 import unittest
 
 import io_scene_ogex
@@ -45,6 +46,9 @@ class OgexExporterTest(unittest.TestCase):
         # NOTE(rosado): assertEquals hang forever here, possibly because unitttest
         # attempts to make a diff? Haven't debugged it - will replace line by line
         # comparisons anyway...
-        self.fail('Failing on purpose, tests need updating') 
+        self.fail('Failing on purpose, tests need updating')
+
+    def file_path(self, file_name) -> pathlib.Path:
+        return pathlib.Path(self.base_dir) / file_name
         
 
