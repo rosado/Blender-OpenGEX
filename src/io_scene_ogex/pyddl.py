@@ -19,10 +19,10 @@ class DdlPrimitiveDataType(Enum):
     int16 = 2
     int32 = 3
     int64 = 4
-    unsigned_int8 = 5
-    unsigned_int16 = 6
-    unsigned_int32 = 7
-    unsigned_int64 = 8
+    uint8 = 5
+    uint16 = 6
+    uint32 = 7
+    uint64 = 8
     half = 9
     float = 10
     double = 11
@@ -304,9 +304,9 @@ class DdlTextWriter(DdlWriter):
             # float/double
             to_bytes = self.to_float_byte if self.rounding is None else self.to_float_byte_rounded
         elif primitive.data_type in [DdlPrimitiveDataType.int8, DdlPrimitiveDataType.int16, DdlPrimitiveDataType.int32,
-                                     DdlPrimitiveDataType.int64, DdlPrimitiveDataType.unsigned_int8,
-                                     DdlPrimitiveDataType.unsigned_int16, DdlPrimitiveDataType.unsigned_int32,
-                                     DdlPrimitiveDataType.unsigned_int64, DdlPrimitiveDataType.half]:
+                                     DdlPrimitiveDataType.int64, DdlPrimitiveDataType.uint8,
+                                     DdlPrimitiveDataType.uint16, DdlPrimitiveDataType.uint32,
+                                     DdlPrimitiveDataType.uint64, DdlPrimitiveDataType.half]:
             # integer types
             to_bytes = self.to_int_byte
         elif primitive.data_type in [DdlPrimitiveDataType.string]:
@@ -531,9 +531,9 @@ class DdlCompressedTextWriter(DdlTextWriter):
             # float/double
             to_bytes = self.to_float_byte if self.rounding is None else self.to_float_byte_rounded
         elif primitive.data_type in [DdlPrimitiveDataType.int8, DdlPrimitiveDataType.int16, DdlPrimitiveDataType.int32,
-                                     DdlPrimitiveDataType.int64, DdlPrimitiveDataType.unsigned_int8,
-                                     DdlPrimitiveDataType.unsigned_int16, DdlPrimitiveDataType.unsigned_int32,
-                                     DdlPrimitiveDataType.unsigned_int64, DdlPrimitiveDataType.half]:
+                                     DdlPrimitiveDataType.int64, DdlPrimitiveDataType.uint8,
+                                     DdlPrimitiveDataType.uint16, DdlPrimitiveDataType.uint32,
+                                     DdlPrimitiveDataType.uint64, DdlPrimitiveDataType.half]:
             # integer types
             to_bytes = self.to_int_byte
         elif primitive.data_type in [DdlPrimitiveDataType.string]:
