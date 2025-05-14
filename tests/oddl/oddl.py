@@ -369,6 +369,8 @@ def parse_as_stream(ctx: ParseContext) -> Iterable:
             yield ElementSize(int(txt))
         elif c == '"':
             yield parse_string(ctx)
+        elif c in ['+', '-']:
+            yield parse_signed_numeric_str(ctx)
         elif c.isnumeric():
             txt = parse_numeric_str(ctx)
             yield NumericLiteral(txt)
@@ -379,7 +381,7 @@ def parse_as_stream(ctx: ParseContext) -> Iterable:
         elif c == ',':
             ctx.advance_position()
         else:
-            raise Exception(f"Unexpected character '{c}'")
+            raise Exception(f"Unexpected character '{c}' at position {ctx.position}, context: <<{ctx.input[ctx.position-10:ctx.position+10]}>>")
         skip_whitespace(ctx)
         c = ctx.current_char()
 
