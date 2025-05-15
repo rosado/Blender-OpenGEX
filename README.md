@@ -28,6 +28,39 @@ Install instructions for all operating systems:
 
 \* Some of the broken features may be implemented in the future if I start needing them.
 
+# Development Notes
+
+The most ergonomic way to develop and debug the extension is to make a symlink (or _junction_ on windows) pointing to `src/io_scene_ogex`
+```
+%APPDATA%\Roaming\Blender Foundation\Blender\4.4\extensions\user_default\opengex_exporter --> src/io_scene_ogex
+```
+
+In blender's python console, install `debugpy` (you have to do it only once):
+
+```python
+import sys
+import subprocess
+subprocess.check_call([sys.executable, "-m", "pip", "install", "debugpy"])
+```
+
+Then you listen to connections by running:
+
+```python
+import debugpy
+debugpy.listen(("localhost", 5678))
+```
+
+VS Codes's python debugger can connect to it (when you set "pathMappings" in `launch.json`)
+
+```
+"pathMappings": [
+            {
+                "localRoot": "${workspaceFolder}\\src\\io_scene_ogex",
+                "remoteRoot": "C:\\Users\\YOUR_USERNAME\\AppData\\Roaming\\Blender Foundation\\Blender\\4.4\\extensions\\user_default\\io_scene_ogex"
+            }
+        ]
+```
+
 # Version Semantics
 
 OpenGEX Exporter Addon versions are built up as:
