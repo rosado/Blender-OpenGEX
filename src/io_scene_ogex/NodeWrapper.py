@@ -22,7 +22,7 @@ class NodeWrapper(BaseWrapper):
 
 
     def process_node(self):
-        if self.container.exportAll or self.item.select:
+        if self.container.exportAll or self.item.select_get():
             self.nodeRef["nodeType"] = self.get_node_type()
             self.nodeRef["structName"] = B"node" + bytes(str(len(self.container.nodes)), "UTF-8")
 

@@ -907,7 +907,8 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
 
             for subnode_wrapper in bone_subnode_array:
                 node = self.export_node(subnode_wrapper, scene, pose_bone)
-                target_structs.append(node)
+                if node is not None:
+                    target_structs.append(node)
                 # if bone_struct is None:
                 #     structs.append(node)
                 # else:
@@ -915,11 +916,13 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
 
         return structs
 
-    def export_node(self, nw: NodeWrapper, scene, pose_bone=None):
+    def export_node(self, nw: NodeWrapper, scene, pose_bone=None) -> Node | None:
 
         # This function exports a single node in the scene and includes its name,
         # object reference, material references (for geometries), and transform.
         # Subnodes are then exported recursively.
+
+        struct = None
 
         if nw.nodeRef:
 
@@ -985,7 +988,8 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
         for subnode in nw.children:
             if not isinstance(subnode.parent.item, bpy.types.Bone):
                 substructure = self.export_node(subnode, scene)
-                struct.children.append(substructure)
+                if substructure is not None:
+                    struct.children.append(substructure)
                 substructure = None
 
         return struct
@@ -1898,7 +1902,9 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
 
         for obj in self.container.nodes:
             if not obj.parent:
-                self.document.structures.append(self.export_node(obj, scene))
+                struct = self.export_node(obj, scene)
+                if struct is not Node:
+                    self.document.structures.append(struct)
 
         # progress update is handled within ExportObjects()
         self.export_objects()

@@ -245,11 +245,13 @@ class DdlTextWriter(DdlWriter):
             previous_was_simple = structure.is_simple_structure()
 
             for structure in self.get_document().structures[1:]:
-                if not (previous_was_simple and structure.is_simple_structure()):
-                    self.file.write(B"\n")
-                    previous_was_simple = structure.is_simple_structure()
+                # TODO: how does structure end up as `None`? We should not add None to structures
+                if structure is not None:
+                    if not (previous_was_simple and structure.is_simple_structure()):
+                        self.file.write(B"\n")
+                        previous_was_simple = structure.is_simple_structure()
 
-                self.file.write(self.structure_as_text(structure))
+                    self.file.write(self.structure_as_text(structure))
 
         self.file.close()
 
