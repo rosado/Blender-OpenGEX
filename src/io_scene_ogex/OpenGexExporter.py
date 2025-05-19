@@ -43,6 +43,11 @@ oddl_format_items = [
      'Text without whitespaces, tabs or newlines.\nSmaller and faster to export.', 1)
 ]
 
+fp_format_items = [
+    ('AS_IS', 'As is', 'Floating point', 0),
+    ('HEX', 'Hex', 'Hexidecimal format, e.g. 0xDEADBEEF,\nbyte-for-byte exact', 1)
+]
+
 
 class ProgressLog:
     def __init__(self):
@@ -77,6 +82,11 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
     rounding: bpy.props.IntProperty(name="Float Rounding Decimal Places",
                                     description="Amount of decimal places to round floating point values to.",
                                     default=6)
+    
+    fp_value_format: bpy.props.EnumProperty(name="Floating point format",
+                                            items=fp_format_items, default='AS_IS',
+                                            description="How to output floating point values.")
+
     oddl_format: bpy.props.EnumProperty(name="OpenDDL Format", items=oddl_format_items, default='TEXT',
                                         description="Format for the exported OpenGEX (based on OpenDDL) file.")
 
@@ -1917,9 +1927,9 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
 
         self.progress.begin_task("Writing file...")
         if self.oddl_format == 'TEXT':
-            DdlTextWriter(self.document, rounding=self.rounding).write(self.filepath)
+            DdlTextWriter(self.document, rounding=self.rounding, floating_point_format=self.fp_value_format).write(self.filepath)
         if self.oddl_format == 'COMPRESSED_TEXT':
-            DdlCompressedTextWriter(self.document, rounding=self.rounding).write(self.filepath)
+            DdlCompressedTextWriter(self.document, rounding=self.rounding, floating_point_format=self.fp_value_format).write(self.filepath)
         self.progress.end_task()
 
         # cleanup
@@ -1955,6 +1965,7 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
         col.separator()
 
         col.label(text="Advanced")
+        col.prop(self, "fp_value_format")
         col.prop(self, "rounding")
         col.prop(self, "export_only_first_material")
         col.prop(self, "image_path_prefix")

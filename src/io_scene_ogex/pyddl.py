@@ -1,5 +1,6 @@
 from abc import abstractmethod
 import math
+import struct
 from enum import Enum
 import bpy
 
@@ -176,7 +177,7 @@ class DdlTextWriter(DdlWriter):
     OpenDdlWriter which writes OpenDdlDocuments in human-readable text form.
     """
 
-    def __init__(self, document: DdlDocument, rounding=6):
+    def __init__(self, document: DdlDocument, rounding=6, floating_point_format='AS_IS'):
         """
         Constructor
         :param document: document to write
@@ -187,6 +188,7 @@ class DdlTextWriter(DdlWriter):
         self.file = None
         self.indent = B""
         self.rounding = rounding
+        self.floating_point_format = floating_point_format
 
     def to_float_byte_rounded(self, f):
         if (math.isinf(f)) or (math.isnan(f)):
@@ -200,6 +202,12 @@ class DdlTextWriter(DdlWriter):
             return B"0.0"
         else:
             return bytes(str(f), "UTF-8")
+    
+    @staticmethod
+    def to_float_hex_byte(f):
+        packed = struct.pack('<f', f)
+        unpacked = struct.unpack('<I', packed)[0]
+        return bytes('0x{:08x}'.format(unpacked), "UTF-8")
 
     @staticmethod
     def to_int_byte(i):
@@ -267,7 +275,10 @@ class DdlTextWriter(DdlWriter):
         elif isinstance(value, int):
             value_bytes = self.to_int_byte(value)
         elif isinstance(value, float):
-            value_bytes = self.to_float_byte(value)
+            if self.floating_point_format == 'HEX':
+                value_bytes = self.to_float_hex_byte(value)
+            else:
+                value_bytes = self.to_float_byte(value)
         elif isinstance(value, DdlStructure):
             value_bytes = self.to_ref_byte(value)
         elif isinstance(value, str):
@@ -304,7 +315,12 @@ class DdlTextWriter(DdlWriter):
             to_bytes = self.to_bool_byte
         elif primitive.data_type in [DdlPrimitiveDataType.double, DdlPrimitiveDataType.float]:
             # float/double
-            to_bytes = self.to_float_byte if self.rounding is None else self.to_float_byte_rounded
+            if self.floating_point_format == 'HEX':
+                to_bytes = self.to_float_hex_byte
+            elif self.rounding is None:
+                to_bytes = self.to_float_byte
+            else: 
+                to_bytes = self.to_float_byte_rounded
         elif primitive.data_type in [DdlPrimitiveDataType.int8, DdlPrimitiveDataType.int16, DdlPrimitiveDataType.int32,
                                      DdlPrimitiveDataType.int64, DdlPrimitiveDataType.uint8,
                                      DdlPrimitiveDataType.uint16, DdlPrimitiveDataType.uint32,
@@ -472,13 +488,13 @@ class DdlCompressedTextWriter(DdlTextWriter):
     Faster than DdlTextWriter and produces smaller files.
     """
 
-    def __init__(self, document, rounding=6):
+    def __init__(self, document, rounding=6, floating_point_format='AS_IS'):
         """
         Constructor
         :param document: document to write
         :param rounding: number of decimal places to keep or None to keep all
         """
-        super().__init__(document, rounding)
+        super().__init__(document, rounding, floating_point_format=floating_point_format)
 
     def write(self, filename):
         self.file = open(filename, "wb")
@@ -501,7 +517,10 @@ class DdlCompressedTextWriter(DdlTextWriter):
         elif isinstance(value, int):
             value_bytes = self.to_int_byte(value)
         elif isinstance(value, float):
-            value_bytes = self.to_float_byte(value)
+            if self.floating_point_format == 'HEX':
+                value_bytes = self.to_float_hex_byte(value)
+            else:
+                value_bytes = self.to_float_byte(value)
         elif isinstance(value, str):
             value_bytes = B"\"" + bytes(value, "UTF-8") + B"\""
         elif isinstance(value, bytes):
@@ -531,7 +550,12 @@ class DdlCompressedTextWriter(DdlTextWriter):
             to_bytes = self.to_bool_byte
         elif primitive.data_type in [DdlPrimitiveDataType.double, DdlPrimitiveDataType.float]:
             # float/double
-            to_bytes = self.to_float_byte if self.rounding is None else self.to_float_byte_rounded
+            if self.floating_point_format == 'HEX':
+                to_bytes = self.to_float_hex_byte
+            elif self.rounding is None:
+                to_bytes = self.to_float_byte
+            else: 
+                to_bytes = self.to_float_byte_rounded
         elif primitive.data_type in [DdlPrimitiveDataType.int8, DdlPrimitiveDataType.int16, DdlPrimitiveDataType.int32,
                                      DdlPrimitiveDataType.int64, DdlPrimitiveDataType.uint8,
                                      DdlPrimitiveDataType.uint16, DdlPrimitiveDataType.uint32,
