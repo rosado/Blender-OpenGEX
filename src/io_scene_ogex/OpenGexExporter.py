@@ -1616,7 +1616,9 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
 
         # Write the color array if it exists.
         if "color" in export_mesh:
-            mesh_struct.children.append(VertexArray(B"color", vertex_count=vertex_count, data=export_mesh["color"]))
+            color_array = export_mesh["color"]
+            vector_size = len(color_array[0])
+            mesh_struct.children.append(VertexArray(B"color", vertex_count=vertex_count, data=export_mesh["color"], vector_size=vector_size))
         
         # Write the texcoord arrays.
         if "texcoord" in export_mesh:
