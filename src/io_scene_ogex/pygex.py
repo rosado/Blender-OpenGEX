@@ -146,71 +146,39 @@ class Texture(DdlStructure):
         super().__init__(B"Texture", props={B"attrib": attrib}, children=[
             DdlPrimitive(DataType.string, data=[path])
         ])
-        # If the texture has a scale and/or offset, then export a coordinate transform.
+        
+        self.properties[B'interpolation'] = texture_slot.interpolation
+        ext = texture_slot.extension.lower()
+        if ext == 'repeat':
+            self.properties[B'x_address'] = ext
+            self.properties[B'y_address'] = ext
+        elif ext == 'extend':
+            self.properties[B'x_address'] = 'border'
+            self.properties[B'y_address'] = 'border'
 
-        uscale = texture_slot.scale[0]
-        vscale = texture_slot.scale[1]
-        uoffset = texture_slot.offset[0]
-        voffset = texture_slot.offset[1]
+        # TODO(rosado): add color space property
 
-        if (uscale != 1.0) or (vscale != 1.0) or (uoffset != 0.0) or (voffset != 0.0):
-            matrix = [[uscale, 0.0, 0.0, 0.0],
-                      [0.0, vscale, 0.0, 0.0],
-                      [0.0, 0.0, 1.0, 0.0],
-                      [uoffset, voffset, 0.0, 1.0]]
-
-            self.children.append(Transform(matrix))
 
 
 class Material(DdlStructure):
-    def __init__(self, material, name, export_ambient=False, textures=[]):
+    def __init__(self, material, name, export_ambient=False, textures: list[bpy.types.ShaderNodeTexImage]=[]):
         if material is None:
             raise ValueError("material cannot be None")
 
         super().__init__(B"Material", name=name, children=[])
 
         if material.name != "":
-            self.children.append(Name(material.name))
+            self.children.append(Name(material.name)) # TODO(rosado): sanitize material.name
 
         intensity = 1.0 # material.diffuse_intensity
-        diffuse = [material.diffuse_color[0] * intensity, material.diffuse_color[1] * intensity,
+        diffuse = [material.diffuse_color[0] * intensity, 
+                   material.diffuse_color[1] * intensity,
                    material.diffuse_color[2] * intensity]
 
         self.children.append(Color("diffuse", diffuse))
 
         intensity = material.specular_intensity
-        specular = [material.specular_color[0] * intensity, material.specular_color[1] * intensity,
-                    material.specular_color[2] * intensity]
 
-        if (specular[0] > 0.0) or (specular[1] > 0.0) or (specular[2] > 0.0):
-            self.children.append(Color("specular", specular))
-            #self.children.append(Param("specular_power", material.specular_hardness))
-
-        # emission = material.emit
-        # if emission > 0.0:
-        #     self.children.append(Color("emission", [emission, emission, emission]))
-
-        # export ambient factor if enabled.
-        # if export_ambient and material.ambient != 1.0:
-        #     self.children.append(Param("ambient_factor", material.ambient))
-
-        # export shadeless flag
-        # if material.use_shadeless:
-        #     self.children.append(Extension(type=B"Shadeless", children=[
-        #         DdlPrimitive(DataType.bool, data=[True])
-        #     ]))
-
-        # export shadow receive flag
-        # if material.use_shadows:
-        #     self.children.append(Extension(type=B"Shadow/receive", children=[
-        #         DdlPrimitive(DataType.bool, data=[True])
-        #     ]))
-
-        # export shadow cast flag
-        # if material.use_cast_shadows:
-        #     self.children.append(Extension(type=B"Shadow/cast", children=[
-        #         DdlPrimitive(DataType.bool, data=[True])
-        #     ]))
         self.children.extend(textures)
 
 

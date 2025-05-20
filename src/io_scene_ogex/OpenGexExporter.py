@@ -1,6 +1,7 @@
 import bpy
 import bmesh
 import time
+import re
 from mathutils import Matrix
 from bpy_extras.io_utils import ExportHelper
 
@@ -47,6 +48,25 @@ fp_format_items = [
     ('AS_IS', 'As is', 'Floating point', 0),
     ('HEX', 'Hex', 'Hexidecimal format, e.g. 0xDEADBEEF,\nbyte-for-byte exact', 1)
 ]
+
+def categorize_texture(name) -> bytes | None:
+    pattern_diffuse = re.compile(r'diffuse', re.IGNORECASE)
+    pattern_specular = re.compile(r'specular', re.IGNORECASE)
+    pattern_emission = re.compile(r'emission', re.IGNORECASE)
+    pattern_normal = re.compile(r'normal', re.IGNORECASE)
+
+    if pattern_diffuse.search(name):
+        return B'diffuse'
+    if pattern_specular.search(name):
+        return B'specular'
+    if pattern_emission.search(name):
+        return B'emission'
+    if pattern_normal.search(name):
+        return B'normal'
+    
+    return None
+
+    
 
 
 class ProgressLog:
@@ -1711,14 +1731,14 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
                 entry["nodeTable"].append(node)
             return entry["struct"]
 
-    def export_texture(self, texture_slot, layer):
-        if texture_slot.texture.type != 'IMAGE':
+    def export_texture(self, texture_slot: bpy.types.ShaderNodeTexImage, layer):
+        if texture_slot.type != 'TEX_IMAGE':
             return None  # only image textures supported.
 
-        if texture_slot.texture.image is None:
+        if texture_slot.image is None:
             return None  # cannot export no image.
 
-        img = texture_slot.texture.image
+        img = texture_slot.image
         if img not in self.container.texture_array:
             # get filename from blender path
             import bpy
@@ -1750,7 +1770,7 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
         else:
             return self.container.texture_array[img]["struct"]
 
-    def export_material(self, node, material):
+    def export_material(self, node, material: bpy.types.Material):
         """
         Create a DdlStructure from material data
         :param node: The referring node which will be added to the corresponding nodeTable
@@ -1758,43 +1778,18 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
         :return: the created DdlStructure
         """
         if material not in self.container.material_array:
-            diffuse_texture = None
-            specular_texture = None
-            emission_texture = None
-            transparency_texture = None
-            normal_texture = None
-
             textures = []
 
-            for texture_slot in []: # material.texture_slots:
-                if texture_slot and texture_slot.use and (texture_slot.texture.type == "IMAGE"):
-                    if (texture_slot.use_map_color_diffuse or texture_slot.use_map_diffuse and (
-                            not diffuse_texture)):
-                        diffuse_texture = texture_slot
-                    elif (
-                                texture_slot.use_map_color_spec or texture_slot.use_map_specular and (
-                                    not specular_texture)):
-                        specular_texture = texture_slot
-                    elif texture_slot.use_map_emit and (not emission_texture):
-                        emission_texture = texture_slot
-                    elif texture_slot.use_map_translucency and (not transparency_texture):
-                        transparency_texture = texture_slot
-                    elif texture_slot.use_map_normal and (not normal_texture):
-                        normal_texture = texture_slot
-
-            if diffuse_texture:
-                textures.append(self.export_texture(diffuse_texture, B"diffuse"))
-            if specular_texture:
-                textures.append(self.export_texture(specular_texture, B"specular"))
-            if emission_texture:
-                textures.append(self.export_texture(emission_texture, B"emission"))
-            if transparency_texture:
-                textures.append(self.export_texture(transparency_texture, B"transparency"))
-            if normal_texture:
-                textures.append(self.export_texture(normal_texture, B"normal"))
+            if material.use_nodes:
+                node_tree = material.node_tree
+                for node in node_tree.nodes:
+                    if node.type == "TEX_IMAGE":
+                        image = node.image
+                        prop = categorize_texture(image.name) or B'diffuse'
+                        textures.append(self.export_texture(node, prop))
 
             name = B"material" + bytes(str(len(self.container.material_array) + 1), "UTF-8")
-            struct = Material(material, name, self.export_ambient, list(filter(None, textures)))
+            struct = Material(material, name, textures=textures)
             self.container.material_array[material] = {"struct": struct, "nodeTable": [node]}
 
             return struct
