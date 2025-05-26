@@ -1597,7 +1597,9 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
 
         # Mesh substructure
 
-        armature = node.find_armature()
+        armature = node.find_armature() 
+        if armature and node.modifiers.get('Armature') is None:
+            armature = None
         apply_modifiers = (not armature)
 
         # Apply all modifiers to create a new mesh with tessfaces.
