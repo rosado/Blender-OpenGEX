@@ -157,13 +157,6 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
 
         return None
 
-    def find_node(self, name):
-        # TODO this does not seem very efficient...
-        for nodeRef in self.node_array.items():
-            if nodeRef[0].name == name:
-                return nodeRef
-        return None
-
     @staticmethod
     def find_export_vertex(bucket, export_vertex_array, vertex):
 
@@ -1348,7 +1341,7 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
 
         return struct
 
-    def export_skin(self, node, armature, export_vertex_array):
+    def export_skin(self, node: bpy.types.Object, armature: bpy.types.Object, export_vertex_info: dict[str, list[any]]) -> DdlStructure:
 
         # This function exports all skinning data, which includes the skeleton
         # and per-vertex bone influence data.
@@ -1360,20 +1353,22 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
         bone_ref_children = []
         transform_matrices = []
         for bone in armature.data.bones:
-            primitive = DdlPrimitive(data_type=DataType.ref, data=[self.find_node(bone.name)[1]["struct"]])
+            found_node = self.container.find_node_wrapper_by_name(bone.name)
+            name = found_node.nodeRef["structName"]
+            ref_dummy = DdlStructure(B"Bone", name=name)
             matrix = armature.matrix_world * bone.matrix_local
-            bone_ref_children.append(primitive)
+            bone_ref_children.append(ref_dummy)
             transform_matrices.append(matrix)
 
         skeleton_struct = DdlStructure(B"Skeleton", children=[
-            DdlStructure(B"BoneRefArray", children=bone_ref_children),
+            DdlStructure(B"BoneRefArray", children=[DdlPrimitive(DdlPrimitiveDataType.ref, data=bone_ref_children)]),
             Transform(matrices=transform_matrices)
         ])
         skin_struct.children.append(skeleton_struct)
 
         # Export the per-vertex bone influence data.
 
-        group_remap = []
+        group_remap = [] # holds indices of bones
 
         for group in node.vertex_groups:
             group_name = group.name
@@ -1388,20 +1383,28 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
         bone_index_array = []
         bone_weight_array = []
 
-        mesh_vertex_array = node.data.vertices
-        for ev in export_vertex_array:
+        positions = export_vertex_info['position']
+        index_translation = export_vertex_info['vertex_index_translation']
+
+        reverse_index_translation = [-1] * len(positions)
+        for original_vertex_index, grouped in enumerate(index_translation):
+            for index in grouped:
+                 reverse_index_translation[index] = original_vertex_index
+
+        
+        for ev_index in range(len(positions)):
             bone_count = 0
             total_weight = 0.0
-            for element in mesh_vertex_array[ev.vertexIndex].groups:
-                bone_index = group_remap[element.group]
-                bone_weight = element.weight
+            original_vertex_index = reverse_index_translation[ev_index]
+            for vert_group in node.data.vertices[original_vertex_index].groups:
+                bone_index = group_remap[vert_group.group]
+                bone_weight = group.weight(original_vertex_index)
                 if (bone_index >= 0) and (bone_weight != 0.0):
                     bone_count += 1
                     total_weight += bone_weight
                     bone_index_array.append(bone_index)
                     bone_weight_array.append(bone_weight)
             bone_count_array.append(bone_count)
-
             if total_weight != 0.0:
                 normalizer = 1.0 / total_weight
                 for i in range(-bone_count, 0):
@@ -1419,8 +1422,10 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
             DdlPrimitive(data_type=DataType.float, data=bone_weight_array)
         ]))
 
+        return skin_struct
+
     @staticmethod
-    def to_per_vertex_data(m: bmesh.types.BMesh, num_materials=1):
+    def to_per_vertex_data(m: bmesh.types.BMesh, num_materials=1) -> dict[str, list[any]]:
         """
         Generate per vertex data from blender bmesh.
         :param m: triangulated bmesh to generate the data from
@@ -1522,7 +1527,12 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
             # add the triple to the list of faces/triangles for the corresponding material index
             mesh_indices[face.material_index].append(face_indices)
 
-        ret_value = {"position": positions, "normal": normals, "tris": mesh_indices}
+        ret_value = {
+            "position": positions,
+            "normal": normals,
+            "tris": mesh_indices,
+            "vertex_index_translation": index_translation
+        }
         if has_uv_layers:
             ret_value["texcoord"] = texcoords
         if color_layer is not None:
@@ -1696,8 +1706,10 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
                 ])
 
         # If the mesh is skinned, export the skinning data here.
-        if armature and False:  # TODO
-            self.export_skin(node, armature, export_mesh)
+        skin_struct = None
+        if armature:
+            skin_struct = self.export_skin(node, armature, export_mesh)
+            mesh_struct.children.append(skin_struct)
 
         # Restore the morph state.
 
