@@ -66,7 +66,7 @@ def categorize_texture(name) -> bytes | None:
     
     return None
 
-    
+
 
 
 class ProgressLog:
@@ -806,7 +806,7 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
         transform = bw.item.matrix_local.copy()
         parent_bone_wrapper = bw.parent
         if parent_bone_wrapper and (math.fabs(parent_bone_wrapper.item.matrix_local.determinant()) > k_export_epsilon):
-            transform = parent_bone_wrapper.item.matrix_local.inverted() * transform
+            transform = parent_bone_wrapper.item.matrix_local.inverted() @ transform
 
         # TODO(rosado): `Bone` does not have a `pose` property
         pose_bone = None # nw.item.pose.bones.get(bw.item.name)
@@ -814,7 +814,7 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
             transform = pose_bone.matrix.copy()
             parent_pose_bone = pose_bone.parent
             if parent_pose_bone and (math.fabs(parent_pose_bone.matrix.determinant()) > k_export_epsilon):
-                transform = parent_pose_bone.matrix.inverted() * transform
+                transform = parent_pose_bone.matrix.inverted() @ transform
 
         transform_struct = Transform(matrix=transform)
 
@@ -1356,9 +1356,8 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
             found_node = self.container.find_node_wrapper_by_name(bone.name)
             name = found_node.nodeRef["structName"]
             ref_dummy = DdlStructure(B"Bone", name=name)
-            matrix = armature.matrix_world * bone.matrix_local
             bone_ref_children.append(ref_dummy)
-            transform_matrices.append(matrix)
+            transform_matrices.append(bone.matrix_local)
 
         skeleton_struct = DdlStructure(B"Skeleton", children=[
             DdlStructure(B"BoneRefArray", children=[DdlPrimitive(DdlPrimitiveDataType.ref, data=bone_ref_children)]),
