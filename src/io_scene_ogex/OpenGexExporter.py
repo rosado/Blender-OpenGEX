@@ -1397,7 +1397,7 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
             original_vertex_index = reverse_index_translation[ev_index]
             for vert_group in node.data.vertices[original_vertex_index].groups:
                 bone_index = group_remap[vert_group.group]
-                bone_weight = group.weight(original_vertex_index)
+                bone_weight = vert_group.weight
                 if (bone_index >= 0) and (bone_weight != 0.0):
                     bone_count += 1
                     total_weight += bone_weight
