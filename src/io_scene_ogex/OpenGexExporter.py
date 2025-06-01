@@ -115,21 +115,10 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
                                                      description="Export object custom properties to an OGEX"
                                                                   "Extension structure",
                                                      default=False)
-    export_physics: bpy.props.BoolProperty(name="Export Game Physics",
-                                           description="Export game physics to an OGEX 'PhysicsMaterial' and"
-                                                       "'PhysicsConstraint' Extension structures.",
-                                           default=False)
     export_ambient: bpy.props.BoolProperty(name="Export Ambient Color",
                                            description="Export world ambient color and material ambient factors as a"
                                                        "not officially specified Param.",
                                            default=False)
-    export_audio: bpy.props.BoolProperty(name="Export Audio Sources",
-                                         description="Export Speaker objects to an OGEX Extension structure.",
-                                         default=False)
-    audio_path_prefix: bpy.props.StringProperty(name="Audio Path Prefix", default='',
-                                                description="Prefix relative to the exported scene file\n"
-                                                            "to set audio paths to.\n\nExample: audio/")
-
     # image texture export properties
     export_image_textures: bpy.props.BoolProperty(name="Export Image Textures",
                                                   description="Whether to export images for exported textures.")
@@ -586,32 +575,6 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
                 # handle Blenders unusual downward-facing camera rest pose
                 transformation = transformation * Matrix.Rotation(math.radians(-90.0), 4, 'X')
 
-            # FIXME: Pretty bad workaround for blender using scale as half extents
-            # if we export a rigid body later, which uses the scale as half extents,
-            # we need to make sure the scale is cancelled out. This is not the case
-            # for mesh shapes.
-            # This needs to be done for the object itself on the one hand and its
-            # children on the other
-            if self.export_physics and (node.parent is not None) \
-                    and node.parent.game.physics_type != 'NO_COLLISION':
-                # a child of a scale as half extent object
-                parent_props = node.parent.game
-                if parent_props.use_collision_bounds and parent_props.collision_bounds_type not in \
-                        ['CONVEX_HULL', 'TRIANGLE_MESH']:
-                    inverted_scale = Matrix()
-                    scale = node.parent.scale
-                    inverted_scale[0][0] = scale[0]
-                    inverted_scale[1][1] = scale[1]
-                    inverted_scale[2][2] = scale[2]
-                    transformation = inverted_scale * transformation
-            if self.export_physics and node.game.physics_type != 'NO_COLLISION':
-                # a child of a scale as half extent object
-                if node.game.use_collision_bounds and node.game.collision_bounds_type not in \
-                        ['CONVEX_HULL', 'TRIANGLE_MESH']:
-                    # simply remove scale
-                    transformation = Matrix.Translation(transformation.translation) \
-                                     * transformation.to_quaternion().to_matrix().to_4x4()
-
             transform_struct = Transform(matrix=self.handle_offset(transformation, nw.offset))
             structs.append(transform_struct)
             if sampled_animation:
@@ -995,19 +958,6 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
                     if isinstance(bw, BoneWrapper):
                         struct.children.extend(self.export_bone(nw, bw, scene))
 
-        # TODO(rosado): can/should this be replaced with rigid body metadata?
-        # export physics properties
-        if self.export_physics:
-            if nw.item.game.physics_type != 'NO_COLLISION' and (nw.item.parent is None or not nw.item.parent.game.use_collision_compound):
-                struct.children.append(self.export_physics_properties(scene, nw.item))
-
-                for constraint in nw.item.constraints:
-                    if constraint.type == 'RIGID_BODY_JOINT' and constraint.target is not None:
-                        struct.children.append(self.export_physics_constraint(constraint, nw.item.scale))
-
-        if self.export_audio and nw.item.type == 'SPEAKER':
-            struct.children.append(self.export_audio_properties(nw.item.data))
-
         for subnode in nw.children:
             if not isinstance(subnode.parent.item, bpy.types.Bone):
                 substructure = self.export_node(subnode, scene)
@@ -1037,309 +987,6 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
                                "TRIANGLE_MESH": B"TriangleMeshShape",
                                "CAPSULE": B"CapsuleShape"}
 
-    def export_physics_properties(self, scene, o):
-        props = o.game
-        struct = Extension(B"PhysicsMaterial", children=[
-            Extension(B"PM/type", children=[
-                # physics collision type
-                DdlPrimitive(DataType.string, data=[props.physics_type])
-            ])
-        ])
-
-        def create_float_property(name, value, default):
-            if not self.almost_equal(value, default):
-                struct.children.append(Extension(B"PM/" + name, children=[
-                    DdlPrimitive(DataType.float, data=[value])
-                ]))
-
-        # export mass
-        create_float_property(b"mass", props.mass, default=1.0)
-        create_float_property(b"radius", props.radius, default=1.0)
-        create_float_property(b"form_factor", props.form_factor, default=0.4)
-
-        create_float_property(b"linear_vel_min", props.velocity_min, default=0.0)
-        create_float_property(b"linear_vel_max", props.velocity_max, default=0.0)
-        create_float_property(b"angular_vel_min", props.angular_velocity_min, default=0.0)
-        create_float_property(b"angular_vel_max", props.angular_velocity_max, default=0.0)
-
-        create_float_property(b"damping", props.damping, default=0.04)
-        create_float_property(b"rot_damping", props.rotation_damping, default=0.1)
-
-        # get physics material of object
-        if o.type == 'MESH':
-            if len(o.material_slots) != 0:
-                # blender game engine only uses the first, therefore only that will be exported.
-                slot = o.material_slots[0]
-                if slot.material.game_settings.physics:
-                    pmat = slot.material.physics
-
-                    create_float_property(b"friction", pmat.friction, default=0.5)
-                    create_float_property(b"elasticity", pmat.elasticity, default=0.0)
-
-                    # force field
-                    if props.use_material_physics_fh:
-                        create_float_property(b"force", pmat.fh_force, default=0.0)
-                        create_float_property(b"force_distance", pmat.fh_distance, default=0.0)
-                        create_float_property(b"force_damping", pmat.fh_damping, default=0.0)
-
-                        if pmat.use_fh_normal:
-                            struct.children.append(Extension(B"PM/force_use_normal", children=[
-                                DdlPrimitive(DataType.bool, data=[True])
-                            ]))
-
-        if props.lock_location_x or props.lock_location_y or props.lock_location_z:
-            lock_vector = [props.lock_location_x, props.lock_location_y, props.lock_location_z]
-            struct.children.append(Extension(B"PM/linear_factor", children=[
-                DdlPrimitive(DataType.float, data=[0.0 if b else 1.0 for b in lock_vector])
-            ]))
-
-        if props.physics_type == 'RIGID_BODY' and (props.lock_rotation_x or props.lock_rotation_y or props.lock_rotation_z):
-            lock_vector = [props.lock_rotation_x, props.lock_rotation_y, props.lock_rotation_z]
-            struct.children.append(Extension(B"PM/angular_factor", children=[
-                DdlPrimitive(DataType.float, data=[0.0 if b else 1.0 for b in lock_vector])
-            ]))
-
-        if props.use_anisotropic_friction:
-            struct.children.append(Extension(B"PM/anisotropic_friction", children=[
-                DdlPrimitive(DataType.float,
-                             data=props.friction_coefficients)
-            ]))
-
-        # calculate collision group and mask
-        collision_mask = 0
-        collision_group = 0
-
-        for i in range(16):
-            if props.collision_group[i]:
-                collision_group |= 1 << i
-            if props.collision_mask[i]:
-                collision_mask |= 1 << i
-
-        if collision_group != 0x01:
-            struct.children.append(Extension(B"PM/collision_group", children=[
-                DdlPrimitive(DataType.uint16, data=[collision_group])
-            ]))
-
-        if collision_mask != 0xFF:
-            struct.children.append(Extension(B"PM/collision_mask", children=[
-                DdlPrimitive(DataType.uint16, data=[collision_mask])
-            ]))
-
-        if props.use_collision_bounds and props.physics_type not in {'NAVMESH', 'OCCLUDER'}:
-            shape_struct = self.export_collision_bounds(o, scene)
-
-            struct.children.append(Extension(B"PM/shape", children=[
-                shape_struct
-            ]))
-
-        return struct
-
-    def export_collision_bounds(self, o, scene, force_no_compound=False, parent_scaling=[1.0, 1.0, 1.0]):
-        if o.game.use_collision_compound and not force_no_compound:
-            compound_struct = Extension(B"CompoundShape", children=[])
-
-            compound_struct.children.append(Extension(B"CompoundChild", children=[
-                self.export_collision_bounds(o, scene, True)
-            ]))
-
-            # Blender does not seem to provide component-wise multiplication. '*' is dot product.
-            parent_scaling = [x*y for (x, y) in zip(o.scale, parent_scaling)]
-
-            for child in o.children:
-                if not child.game.use_collision_bounds:
-                    continue
-
-                # apply scale and reset scaling on matrix.
-                transform = child.matrix_local
-                scaled_translate = [x*y for (x, y) in zip(transform.translation, parent_scaling)]
-                transform = Matrix.Translation(scaled_translate) * transform.to_quaternion().to_matrix().to_4x4()
-
-                if self.matrices_differ(transform, Matrix()):
-                    compound_struct.children.append(Extension(B"CompoundChild", children=[
-                        DdlTextWriter.set_max_elements_per_line(
-                            DdlPrimitive(DataType.float,
-                                         data=[tuple(itertools.chain(*zip(*transform)))],
-                                         vector_size=16),
-                            elements=4),
-                        self.export_collision_bounds(child, scene, parent_scaling=parent_scaling)
-                    ]))
-                else:
-                    compound_struct.children.append(Extension(B"CompoundChild", children=[
-                        self.export_collision_bounds(child, scene, parent_scaling=parent_scaling)
-                    ]))
-
-            return compound_struct
-
-        else:
-            # export collision shape
-            shape_type = o.game.collision_bounds_type
-            shape_struct = Extension(self.SHAPE_TYPE_TO_EXTENSION[shape_type], children=[])
-
-            if shape_type not in {'CONVEX_HULL', 'TRIANGLE_MESH'}:
-                if shape_type == 'SPHERE':
-                    # export radius of bounding sphere. Same as "radius" property.
-                    # TODO: Deprecated.
-                    shape_struct.add_primitive(DataType.float, data=[o.game.radius])
-                else:
-                    # export scale as half-extents
-                    shape_struct.add_primitive(DataType.float, data=[o.scale], vector_size=3)
-            else:
-                # export geometry as triangle mesh
-                shape_struct.add_primitive(DataType.ref, [self.export_geometry(scene, node=o, mesh=o.data)])
-
-            # collision shape margin
-            shape_struct.children.append(Extension(B"PM/margin", children=[
-                DdlPrimitive(DataType.float, data=[o.game.collision_margin])
-            ]))
-
-            return shape_struct
-
-    def export_physics_constraint(self, constraint, scale):
-        struct = Extension(B"PhysicsConstraint", children=[
-            Extension(B"PC/pivot_type", children=[
-                DdlPrimitive(DataType.string, data=[constraint.pivot_type])
-            ])
-        ])
-
-        if constraint.target is not None:
-            # FIXME: Name is not unique! Because of linked objects there can be more that one object with the same name
-            # NOTE(rosado): possibly include `node.library.filepath` in the name to ensure uniqueness
-            target_struct = Extension(B"PC/target", children=[
-                DdlPrimitive(DataType.ref, data=[constraint.target.name])
-            ])
-            struct.children.append(target_struct)
-            self.unresolved_refs.append(target_struct.children[0])
-
-        if constraint.use_linked_collision:
-            struct.children.append(Extension(B"PC/use_linked_collision", children=[
-                DdlPrimitive(DataType.bool, data=[constraint.use_linked_collision])
-            ]))
-
-        if constraint.pivot_x != 0.0 or constraint.pivot_y != 0.0 or constraint.pivot_z != 0.0:
-            struct.children.append(Extension(B"PC/pivot", children=[
-                DdlPrimitive(DataType.float,
-                             data=[constraint.pivot_x*scale.x,
-                                   constraint.pivot_y*scale.y,
-                                   constraint.pivot_z*scale.z])
-            ]))
-
-        if constraint.axis_x != 0.0 or constraint.axis_y != 0.0 or constraint.axis_z != 0.0:
-            struct.children.append(Extension(B"PC/axis", children=[
-                DdlPrimitive(DataType.float,
-                             data=[constraint.axis_x,
-                                   constraint.axis_y,
-                                   constraint.axis_z])
-            ]))
-
-        if constraint.pivot_type in {'HINGE', 'CONE_TWIST', 'GENERIC_6_DOF'} \
-                and constraint.use_angular_limit_x:
-
-            struct.children.append(Extension(B"PC/limit_angle_x", children=[
-                DdlPrimitive(DataType.float,
-                             data=[constraint.limit_angle_min_x,
-                                   constraint.limit_angle_max_x])
-            ]))
-
-            if constraint.pivot_type in {'CONE_TWIST', 'GENERIC_6_DOF'}:
-
-                if constraint.use_angular_limit_y:
-                    struct.children.append(Extension(B"PC/limit_angle_y", children=[
-                        DdlPrimitive(DataType.float,
-                                     data=[constraint.limit_angle_min_y,
-                                           constraint.limit_angle_max_y])
-                    ]))
-                if constraint.use_angular_limit_z:
-                    struct.children.append(Extension(B"PC/limit_angle_z", children=[
-                        DdlPrimitive(DataType.float,
-                                     data=[constraint.limit_angle_min_z,
-                                           constraint.limit_angle_max_z])
-                    ]))
-
-        if constraint.pivot_type == 'GENERIC_6_DOF':
-            if constraint.use_limit_x:
-                struct.children.append(Extension(B"PC/limit_x", children=[
-                    DdlPrimitive(DataType.float,
-                                 data=[constraint.limit_min_x,
-                                       constraint.limit_max_x])
-                ]))
-            if constraint.use_limit_y:
-                struct.children.append(Extension(B"PC/limit_y", children=[
-                    DdlPrimitive(DataType.float,
-                                 data=[constraint.limit_min_y,
-                                       constraint.limit_max_y])
-                ]))
-            if constraint.use_limit_z:
-                struct.children.append(Extension(B"PC/limit_z", children=[
-                    DdlPrimitive(DataType.float,
-                                 data=[constraint.limit_min_z,
-                                       constraint.limit_max_z])
-                ]))
-
-        return struct
-
-    def export_audio_properties(self, speaker):
-        struct = Extension(B"AudioSource", children=[])
-
-        if speaker.sound is not None:
-            import bpy
-            (_, path) = os.path.split(bpy.path.abspath(speaker.sound.filepath))
-            # prepend path prefix
-            path = os.path.relpath(self.audio_path_prefix + path).replace("\\", "/")
-            struct.children.append(DdlPrimitive(DataType.string, data=[path]))
-
-        if speaker.volume != 1.0:
-            struct.children.append(Extension(B"AS/gain", children=[
-                DdlPrimitive(DataType.float, data=[speaker.volume])
-            ]))
-
-        if speaker.pitch != 1.0:
-            struct.children.append(Extension(B"AS/pitch", children=[
-                DdlPrimitive(DataType.float, data=[speaker.pitch])
-            ]))
-
-        if speaker.volume_min != 0.0:
-            struct.children.append(Extension(B"AS/gain_min", children=[
-                DdlPrimitive(DataType.float, data=[speaker.volume_min])
-            ]))
-
-        if speaker.volume_max != 1.0:
-            struct.children.append(Extension(B"AS/gain_max", children=[
-                DdlPrimitive(DataType.float, data=[speaker.volume_max])
-            ]))
-
-        if speaker.attenuation != 1.0:
-            struct.children.append(Extension(B"AS/rolloff", children=[
-                DdlPrimitive(DataType.float, data=[speaker.attenuation])
-            ]))
-
-        if speaker.distance_max < 10000000.0:
-            struct.children.append(Extension(B"AS/dist_max", children=[
-                DdlPrimitive(DataType.float, data=[speaker.distance_max])
-            ]))
-
-        if speaker.distance_reference != 1.0:
-            struct.children.append(Extension(B"AS/dist_ref", children=[
-                DdlPrimitive(DataType.float, data=[speaker.distance_reference])
-            ]))
-
-        use_cone = False
-        cone_struct = Extension(B"AS/cone", children=[])
-        if speaker.cone_angle_outer != 360.0 or speaker.cone_angle_inner != 360.0:
-            cone_struct.children.append(DdlPrimitive(
-                DataType.float, vector_size=2, data=[(speaker.cone_angle_outer, speaker.cone_angle_inner)]
-            ))
-            use_cone = True
-
-        if speaker.cone_volume_outer != 1.0:
-            cone_struct.children.append(Extension(B"AS/gain_outer", children=[
-                DdlPrimitive(DataType.float, data=[speaker.cone_volume_outer])
-            ]))
-            use_cone = True
-
-        if use_cone:
-            struct.children.append(cone_struct)
-
-        return struct
 
     def export_skin(self, node: bpy.types.Object, armature: bpy.types.Object, export_vertex_info: dict[str, list[any]]) -> DdlStructure:
 
@@ -1967,11 +1614,7 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
 
         col.label(text="Extensions")
         col.prop(self, "export_custom_properties")
-        col.prop(self, "export_physics")
-        #col.prop(self, "export_ambient")
-        col.prop(self, "export_audio")
-        if self.export_audio:
-            col.prop(self, "audio_path_prefix")
+        # col.prop(self, "export_ambient")
         col.separator()
 
         col.label(text="Advanced")
