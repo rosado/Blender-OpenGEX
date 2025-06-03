@@ -27,11 +27,11 @@ class NodeWrapper(BaseWrapper):
             self.nodeRef["structName"] = B"node" + bytes(str(len(self.container.nodes)), "UTF-8")
 
             if self.item.parent_type == "BONE":
-                bone_subnode_array = self.container.boneParentArray.get(self.item.parent_bone)
+                bone_subnode_array = self.container.bone_subnodes.get(self.item.parent_bone)
                 if bone_subnode_array:
                     bone_subnode_array.append(self)
                 else:
-                    self.container.boneParentArray[self.item.parent_bone] = [self]
+                    self.container.bone_subnodes[self.item.parent_bone] = [self]
 
             # all bones belonging to the armature are stored in the `bones` property of an armature.
             # We only want those bones whose `parent` is not set (meaning: they're not attached 
