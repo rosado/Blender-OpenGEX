@@ -1560,18 +1560,29 @@ class OpenGexExporter(bpy.types.Operator, ExportHelper):
 
         self.progress.begin_task("Preparing objects...")
         for obj in scene.objects:
-            if obj.parent is None:
+            if not obj.parent:
                 NodeWrapper(obj, self.container)
 
         # self.process_skinned_meshes()
 
         self.progress.end_task()
-
         for obj in self.container.nodes:
             if not obj.parent:
-                struct = self.export_node(obj, scene)
-                if struct is not Node:
-                    self.document.structures.append(struct)
+                if isinstance(obj, BoneWrapper):
+                    continue
+                else:
+                    struct = self.export_node(obj, scene)
+                    if struct is not Node:
+                        self.document.structures.append(struct)
+
+        for armature_name, root_bones in self.container.armatures.items():
+            armature_struct = DdlStructure(B"Node", 
+                props=OrderedDict([(B"blender_armature", bytes(armature_name, "UTF-8"))]),
+                children=[
+                    self.export_node(bone, scene) for bone in root_bones
+                ])
+            self.document.structures.append(armature_struct)
+
 
         # progress update is handled within ExportObjects()
         self.export_objects()

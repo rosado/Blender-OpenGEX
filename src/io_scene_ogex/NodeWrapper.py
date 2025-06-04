@@ -42,7 +42,7 @@ class NodeWrapper(BaseWrapper):
                     for bone in skeleton.bones:
                         if not bone.parent:
                             # FIXME register somehow
-                            self.bones.append(BoneWrapper(bone, self.container))
+                            self.bones.append(BoneWrapper(bone, self.container, armature=skeleton))
 
     def get_node_type(self):
         if self.item.type == "MESH":

@@ -15,6 +15,10 @@ class NodeType(IntEnum):
 
 
 class ExporterState:
+    """
+    armatures: map of armature names to root bones (e.g. bones with no parent)
+    """
+
     def __init__(self, export_all, sample_animation, scene):
         self.nodes = []
         self.exportAll = export_all
@@ -30,6 +34,7 @@ class ExporterState:
         self.camera_array = {}
         self.material_array = {}
         self.texture_array = {}
+        self.armatures = {}
 
     def find_node_wrapper_by_name(self, node_name):
         for nw in self.nodes:
